@@ -152,7 +152,7 @@ async function xuLyTinNhan(senderId, userMessage, userInfo) {
       );
     }
   } else {
-    if (userMessage.toLowerCase() === "xem danh sach") {
+    if (userMessage.toLowerCase() === "xem danh sách") {
       const users = docDanhSachUser();
       const danhSach = Object.values(users)
         .filter(u => u.xacNhan)
