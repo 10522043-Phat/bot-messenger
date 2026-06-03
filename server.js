@@ -8,7 +8,7 @@ app.use(express.json());
 
 // ===== CẤU HÌNH =====
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "mytoken123";
 const ALLOWED_NAMES = ["Nguyen Van A", "Tran Thi B"];
 const USER_FILE = "users.json";
 // ====================
@@ -70,10 +70,14 @@ app.get("/webhook", (req, res) => {
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
+  console.log("Token nhận được:", token);
+  console.log("Token trong server:", VERIFY_TOKEN);
+
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     console.log("✅ Webhook xác thực thành công!");
     res.status(200).send(challenge);
   } else {
+    console.log("❌ Xác thực thất bại");
     res.sendStatus(403);
   }
 });
