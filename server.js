@@ -182,6 +182,41 @@ async function guiTinNhan(recipientId, text) {
 
 
 const PORT = process.env.PORT || 3000;
+// Trang xem danh sách user đã xác nhận
+app.get("/admin/users", (req, res) => {
+  const users = docDanhSachUser();
+  
+  const danhSach = Object.entries(users)
+    .filter(([id, info]) => info.xacNhan)
+    .map(([id, info]) => ({
+      ten: info.ten,
+      thoiGianThamGia: info.thoiGianThamGia
+    }));
+
+  // Hiển thị dạng bảng HTML
+  let html = `
+    <h2>Danh sách đã xác nhận (${danhSach.length} người)</h2>
+    <table border="1" cellpadding="10">
+      <tr>
+        <th>STT</th>
+        <th>Họ tên</th>
+        <th>Thời gian tham gia</th>
+      </tr>
+  `;
+
+  danhSach.forEach((user, index) => {
+    html += `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${user.ten}</td>
+        <td>${user.thoiGianThamGia}</td>
+      </tr>
+    `;
+  });
+
+  html += `</table>`;
+  res.send(html);
+});
 app.listen(PORT, () => {
   console.log(`🚀 Server đang chạy tại port ${PORT}`);
   console.log("⏰ Đã bật lịch nhắc đóng tiền tự động!");
