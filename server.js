@@ -177,7 +177,8 @@ async function guiTinNhan(recipientId, text) {
 }
 
 
-app.listen(3000, () => {
-  console.log("🚀 Server đang chạy tại http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server đang chạy tại port ${PORT}`);
   console.log("⏰ Đã bật lịch nhắc đóng tiền tự động!");
 });
