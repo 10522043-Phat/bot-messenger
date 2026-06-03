@@ -134,7 +134,6 @@ async function xuLyGetStarted(senderId) {
 
 // ===== XỬ LÝ TIN NHẮN =====
 async function xuLyTinNhan(senderId, userMessage, userInfo) {
-  // Nếu chưa xác nhận tên → kiểm tra tên vừa nhập
   if (!userInfo.xacNhan) {
     const tenKhop = ALLOWED_NAMES.find(
       (ten) => ten.toLowerCase() === userMessage.toLowerCase()
@@ -144,13 +143,12 @@ async function xuLyTinNhan(senderId, userMessage, userInfo) {
       xacNhanUser(senderId, tenKhop);
       await guiTinNhan(senderId, `✅ Xác nhận thành công! Xin chào ${tenKhop}!`);
       await guiTinNhan(senderId,
-        "📅 Bạn sẽ nhận nhắc nhở đóng tiền tự động vào ngày 1 hàng tháng.\n" +
-        "Cảm ơn bạn đã đăng ký! 🎉"
+        "📅 Bạn sẽ nhận nhắc nhở đóng tiền tự động hàng tháng. 🎉"
       );
     } else {
       await guiTinNhan(senderId,
         `❌ Tên "${userMessage}" không có trong danh sách.\n` +
-        "Vui lòng nhập lại đúng họ tên đầy đủ của bạn:"
+        "Vui lòng nhập lại đúng họ tên:"
       );
     }
   } else {
@@ -165,17 +163,14 @@ async function xuLyTinNhan(senderId, userMessage, userInfo) {
         `📋 Danh sách đã xác nhận:\n\n${danhSach}\n\n` +
         `Tổng: ${Object.values(users).filter(u => u.xacNhan).length} người`
       );
-
     } else {
-    // Đã xác nhận rồi → trả lời bình thường
-    await guiTinNhan(senderId,
-      `Xin chào ${userInfo.ten}! 👋\n` +
-      "Bạn cần hỗ trợ gì không?"
-    );
+      await guiTinNhan(senderId,
+        `Xin chào ${userInfo.ten}! 👋\n` +
+        "Bạn cần hỗ trợ gì không?"
+      );
+    }
   }
 }
-
-
 // ===== GỬI TIN NHẮN =====
 async function guiTinNhan(recipientId, text) {
   try {
