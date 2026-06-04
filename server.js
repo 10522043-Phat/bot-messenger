@@ -20,7 +20,7 @@ let ALLOWED_NAMES = [
   "Nguyen Axiom", "Nguyen Truc", "Hải Dương", "Simon Hua",
   "Khang Tran", "Đăng Khoa", "Xuân Khoa",
   "Nguyên Ngọc Khánh Uyên", "Nguyễn Trường Thịnh",
-  "Son Le", "Hà Minh Khải", "Kenneth Reichert", "Trần Bình Minh"
+  "Son Le", "Hà Minh Khải", "Kenneth Reichert", "Trần Bình Minh",
 "Công Thành", "Khai Le", "Hương Võ", "Vũ Kha"
 ];
 // ====================
