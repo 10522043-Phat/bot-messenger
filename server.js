@@ -59,9 +59,9 @@ async function luuUserMoi(senderId) {
 async function xuLyGetStarted(senderId) {
   await guiTinNhan(
     senderId,
-    "Êy bạn có thể điền nickname Facebook của bạn cho mình được không\n\n" +
-	DANH_SACH_TEN_URL
+    "Êy bạn có thể điền nickname Facebook của bạn cho mình được không"
   );
+  await guiAnhDanhSachTen(senderId);
 }
  
  
@@ -232,9 +232,9 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     } else {
       await guiTinNhan(senderId,
         `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
-        "Bạn nhập tên của bạn theo đúng hình này giúp mình\n\n" +
-	DANH_SACH_TEN_URL
+        "Bạn nhập tên của bạn theo đúng hình này giúp mình"
       );
+      await guiAnhDanhSachTen(senderId);
     }
   } 
 }
@@ -277,6 +277,29 @@ async function guiAnhQRCode(recipientId) {
   }
 }
 
+async function guiAnhDanhSachTen(recipientId) {
+  try {
+    await axios.post(
+      "https://graph.facebook.com/v19.0/me/messages",
+      {
+        recipient: { id: recipientId },
+        message: {
+          attachment: {
+            type: "image",
+            payload: {
+              url: DANH_SACH_TEN_URL,
+              is_reusable: true
+            }
+          }
+        }
+      },
+      { params: { access_token: PAGE_ACCESS_TOKEN } }
+    );
+    console.log("Đã gửi ảnh danh sách tên!");
+  } catch (err) {
+    console.error("Lỗi gửi ảnh:", err.response?.data || err.message);
+  }
+}
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server chạy tại port ${PORT}`);
