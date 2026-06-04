@@ -14,7 +14,7 @@ const MONGODB_URI       = process.env.MONGODB_URI;
 let ALLOWED_NAMES = [
   "Quyên", "Trúc Ngân", "Thiên An", "Hao Huynh",
   "Trần Agness", "Bảo Duy", "Ryan Nguyen", "Gia Bảo",
-  "Thái Nam", "Phát", "Đức Thiện", "Trần Yến Nhi",
+  "Thái Nam", "Nguyễn Phúc", "Đức Thiện", "Trần Yến Nhi",
   "Duy Nguyen", "Vinhh", "Le Bao Khang", "Hùng Anh",
   "Anh Minh", "Đình Hiệu", "Sơn Minh", "Quách Minh Phúc",
   "Nguyen Axiom", "Nguyen Truc", "Hải Dương", "Simon Hua",
