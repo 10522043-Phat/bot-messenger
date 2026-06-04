@@ -41,6 +41,30 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model("User", userSchema);
 
 
+// ===== LƯU USER MỚI =====
+async function luuUserMoi(senderId) {
+  try {
+    const existing = await User.findOne({ senderId });
+    if (!existing) {
+      await User.create({ senderId });
+      console.log(`💾 Đã lưu user mới: ${senderId}`);
+    }
+  } catch (err) {
+    console.error("❌ Lỗi lưu user:", err.message);
+  }
+}
+
+// ===== CHÀO USER MỚI =====
+async function xuLyGetStarted(senderId) {
+  await guiTinNhan(
+    senderId,
+    "Xin chào! Chào mừng bạn đến với page! 👋\n\n" +
+    "Bạn sẽ nhận được nhắc nhở đóng tiền hàng tháng tự động.\n\n" +
+    "📝 Vui lòng nhập họ tên đầy đủ để xác nhận tham gia:"
+  );
+}
+ 
+ 
 // ===== LỊCH NHẮC ĐÓNG TIỀN =====
 cron.schedule("0 8 1 * *", async () => {
   console.log("Đến giờ gửi nhắc đóng tiền!");
