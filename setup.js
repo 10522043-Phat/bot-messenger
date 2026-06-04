@@ -1,10 +1,16 @@
+require("dotenv").config();
 const axios = require("axios");
 
-const PAGE_ACCESS_TOKEN = "EAAXNCHR5gcQBRh1qOmduGVevVnPF4DEUH5yuxYtpQOryjAhCZCv1kZAJNy9mQni7V1RS91L2ZCSlHZCU5Y9uZAx19S6qjNoY1cY8nJwDxpCbOk8zyyJ1MWRZCMYrKAeZA8TMcjtZAulAU2DZASZBjFT2DEJug7N9d8ZCzqOYei8uRJasHQsAy93tc8ZCfgk2UWPg6UujXT95fX3LPgZDZD"; // Thay token vào đây
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
+const PAGE_NAME         = process.env.PAGE_NAME || "TranAgness";
 
-async function taoNutGetStarted() {
+async function thietLap() {
+  console.log("🔧 Bắt đầu thiết lập bot...\n");
+  await taoMessengerProfile();
+}
+
+async function taoMessengerProfile() {
   try {
-    // Tạo nút Get Started
     const res = await axios.post(
       "https://graph.facebook.com/v19.0/me/messenger_profile",
       {
@@ -12,23 +18,28 @@ async function taoNutGetStarted() {
         greeting: [
           {
             locale: "default",
-            text: "Xin chào! Nhấn Get Started để nhận thông báo đóng tiền tự động 👋"
+            text: "Xin chào! Nhấn Bắt đầu hoặc gửi tin nhắn bất kỳ để đăng ký nhận nhắc đóng tiền tự động 👋",
           },
           {
             locale: "vi_VN",
-            text: "Xin chào! Nhấn Bắt đầu để nhận thông báo đóng tiền tự động 👋"
-          }
-        ]
+            text: "Xin chào! Nhấn Bắt đầu hoặc gửi tin nhắn bất kỳ để đăng ký nhận nhắc đóng tiền tự động 👋",
+          },
+        ],
       },
-      {
-        params: { access_token: PAGE_ACCESS_TOKEN }
-      }
+      { params: { access_token: PAGE_ACCESS_TOKEN } }
     );
 
-    console.log("✅ Tạo nút Get Started thành công!", res.data);
+    console.log("✅ Thiết lập Messenger Profile thành công!", res.data);
+    console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("📎 Link ghim lên nhóm Facebook:");
+    console.log(`   https://m.me/${PAGE_NAME}?ref=welcome`);
+    console.log("\n📌 Việc cần làm tiếp theo:");
+    console.log("   Vào developers.facebook.com > App > Messenger > API Settings");
+    console.log("   > Webhooks > Edit > Tích thêm: messaging_referrals > Save");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
   } catch (err) {
     console.error("❌ Lỗi:", err.response?.data || err.message);
   }
 }
 
-taoNutGetStarted();
+thietLap();
