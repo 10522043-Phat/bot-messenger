@@ -11,6 +11,7 @@ const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN      = process.env.VERIFY_TOKEN || "mytoken123";
 const MONGODB_URI       = process.env.MONGODB_URI;
 const QR_CODE_URL       = "https://ibb.co/9m1Np9PY";
+const DANH_SACH_TEN_URL ="https://ibb.co/s4PVx01";
 let ALLOWED_NAMES = [
   "Quyên", "Trúc Ngân", "Thiên An", "Hao Huynh",
   "Trần Agness", "Bảo Duy", "Ryan Nguyen", "Gia Bảo",
@@ -28,8 +29,8 @@ let ALLOWED_NAMES = [
 
 // ===== KẾT NỐI MONGODB =====
 mongoose.connect(MONGODB_URI)
-  .then(() => console.log("✅ Kết nối MongoDB thành công!"))
-  .catch(err => console.error("❌ Lỗi MongoDB:", err));
+  .then(() => console.log("Kết nối MongoDB thành công"))
+  .catch(err => console.error("Lỗi MongoDB:", err));
 
 const userSchema = new mongoose.Schema({
   senderId:        { type: String, required: true, unique: true },
@@ -47,10 +48,10 @@ async function luuUserMoi(senderId) {
     const existing = await User.findOne({ senderId });
     if (!existing) {
       await User.create({ senderId });
-      console.log(`💾 Đã lưu user mới: ${senderId}`);
+      console.log(`Đã lưu user mới: ${senderId}`);
     }
   } catch (err) {
-    console.error("❌ Lỗi lưu user:", err.message);
+    console.error("Lỗi lưu user:", err.message);
   }
 }
 
@@ -58,16 +59,15 @@ async function luuUserMoi(senderId) {
 async function xuLyGetStarted(senderId) {
   await guiTinNhan(
     senderId,
-    "Xin chào! Chào mừng bạn đến với page! 👋\n\n" +
-    "Bạn sẽ nhận được nhắc nhở đóng tiền hàng tháng tự động.\n\n" +
-    "📝 Vui lòng nhập họ tên đầy đủ để xác nhận tham gia:"
+    "Êy bạn có thể điền nickname Facebook của bạn cho mình được không\n\n" +
+	DANH_SACH_TEN_URL
   );
 }
  
  
 // ===== LỊCH NHẮC ĐÓNG TIỀN =====
-cron.schedule("0 8 1 * *", async () => {
-  console.log("Đến giờ gửi nhắc đóng tiền!");
+cron.schedule("0 13 6 * *", async () => {
+  console.log("Gửi nhắc đóng tiền");
   const users = await User.find({ xacNhan: true });
 
   for (const user of users) {
@@ -92,7 +92,7 @@ app.get("/webhook", (req, res) => {
   const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("✅ Webhook xác thực thành công!");
+    console.log("Webhook xác thực thành công");
     res.status(200).send(challenge);
   } else {
     res.sendStatus(403);
@@ -111,7 +111,7 @@ app.post("/webhook", async (req, res) => {
         await xuLyGetStarted(senderId);
       } else if (event.message?.text) {
         const msg = event.message.text.trim();
-        console.log(`📩 Tin nhắn từ ${senderId}: ${msg}`);
+        console.log(`Tin nhắn từ ${senderId}: ${msg}`);
         let user = await User.findOne({ senderId });
         if (!user) {
           await luuUserMoi(senderId);
@@ -187,12 +187,11 @@ async function xuLyTinNhan(senderId, userMessage, user) {
       // Gửi QR code
       await User.updateOne({ senderId }, { choDoiThanhToan: false });
       await guiTinNhan(senderId,
-        `🎉 Cảm ơn ${user.ten}!\n` +
-        `Đây là mã QR để thanh toán:`
+        `Vậy bạn thanh toán giúp mình nhé` 
       );
       await guiAnhQRCode(senderId);
       await guiTinNhan(senderId,
-        `✅ Sau khi thanh toán xong báo mình biết nhé!`
+        `Có gì bạn gửi ảnh thanh toán lên nhóm giúp mình nhé`
       );
 
     } else if (msg === "no" || msg === "không" || msg === "khong") {
@@ -207,17 +206,14 @@ async function xuLyTinNhan(senderId, userMessage, user) {
       if (index > -1) ALLOWED_NAMES.splice(index, 1);
 
       await guiTinNhan(senderId,
-        `😢 Rất tiếc khi bạn không tiếp tục!\n` +
-        `Tên "${user.ten}" đã được xóa khỏi danh sách.\n\n` +
-        `Nếu muốn tham gia lại, nhập tên của bạn nhé!`
+        `Vậy bạn out tài khoản giúp mình nhe`
       );
 
     } else {
       // Không phải yes/no
       await guiTinNhan(senderId,
-        `Vui lòng trả lời:\n` +
-        `👉 YES — để tiếp tục và nhận QR thanh toán\n` +
-        `👉 NO  — để hủy đăng ký`
+        `YES — để tiếp tục và nhận QR thanh toán\n` +
+        `NO  — để hủy đăng ký`
       );
     }
     return;
@@ -231,19 +227,16 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     );
     if (tenKhop) {
       await User.updateOne({ senderId }, { ten: tenKhop, xacNhan: true });
-      await guiTinNhan(senderId, `✅ Xác nhận thành công! Xin chào ${tenKhop}!`);
-      await guiTinNhan(senderId, "📅 Bạn sẽ nhận nhắc đóng tiền tự động hàng tháng. 🎉");
+      await guiTinNhan(senderId, `Xác nhận thành công! Xin chào ${tenKhop}!`);
+      await guiTinNhan(senderId, "Có vấn đề phát sinh thì bạn nhắn cho mình nha.");
     } else {
       await guiTinNhan(senderId,
-        `❌ Tên "${userMessage}" không có trong danh sách.\n` +
-        "Vui lòng nhập lại đúng họ tên:"
+        `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
+        "Bạn nhập tên của bạn theo đúng hình này giúp mình\n\n" +
+	DANH_SACH_TEN_URL
       );
     }
-  } else {
-    await guiTinNhan(senderId,
-      `Xin chào ${user.ten}! 👋\nBạn cần hỗ trợ gì không?`
-    );
-  }
+  } 
 }
 // ===== GỬI TIN NHẮN =====
 async function guiTinNhan(recipientId, text) {
@@ -253,9 +246,9 @@ async function guiTinNhan(recipientId, text) {
       { recipient: { id: recipientId }, message: { text } },
       { params: { access_token: PAGE_ACCESS_TOKEN } }
     );
-    console.log(`📤 Đã gửi: "${text.substring(0, 50)}"`);
+    console.log(`Đã gửi: "${text.substring(0, 50)}"`);
   } catch (err) {
-    console.error("❌ Lỗi gửi tin:", err.response?.data || err.message);
+    console.error("Lỗi gửi tin:", err.response?.data || err.message);
   }
 }
 
@@ -278,9 +271,9 @@ async function guiAnhQRCode(recipientId) {
       },
       { params: { access_token: PAGE_ACCESS_TOKEN } }
     );
-    console.log("📤 Đã gửi QR code!");
+    console.log("Đã gửi QR code!");
   } catch (err) {
-    console.error("❌ Lỗi gửi QR:", err.response?.data || err.message);
+    console.error("Lỗi gửi QR:", err.response?.data || err.message);
   }
 }
 
