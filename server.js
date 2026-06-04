@@ -144,7 +144,7 @@ async function xuLyTinNhan(senderId, userMessage, user) {
   // Lệnh xem tên được phép
   if (userMessage.toLowerCase() === "xem ten") {
     const ds = ALLOWED_NAMES.map((t, i) => `${i+1}. ${t}`).join("\n");
-    await guiTinNhan(senderId, `📋 Danh sách tên:\n\n${ds}`);
+    await guiTinNhan(senderId, `Danh sách tên:\n\n${ds}`);
     return;
   }
 
@@ -153,10 +153,10 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     const users   = await User.find({ xacNhan: true });
     const danhSach = users.map((u, i) => `${i+1}. ${u.ten}`).join("\n");
     if (users.length === 0) {
-      await guiTinNhan(senderId, "📋 Chưa có ai xác nhận tên.");
+      await guiTinNhan(senderId, "Chưa có ai xác nhận tên.");
     } else {
       await guiTinNhan(senderId,
-        `📋 Đã xác nhận:\n\n${danhSach}\n\nTổng: ${users.length} người`
+        `Đã xác nhận:\n\n${danhSach}\n\nTổng: ${users.length} người`
       );
     }
     return;
