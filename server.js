@@ -10,7 +10,7 @@ app.use(express.json());
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN      = process.env.VERIFY_TOKEN || "mytoken123";
 const MONGODB_URI       = process.env.MONGODB_URI;
-
+const QR_CODE_URL       = https://ibb.co/9m1Np9PY;
 let ALLOWED_NAMES = [
   "Quyên", "Trúc Ngân", "Thiên An", "Hao Huynh",
   "Trần Agness", "Bảo Duy", "Ryan Nguyen", "Gia Bảo",
@@ -35,6 +35,7 @@ const userSchema = new mongoose.Schema({
   senderId:        { type: String, required: true, unique: true },
   ten:             { type: String, default: "Chưa xác nhận" },
   xacNhan:         { type: Boolean, default: false },
+  choDoiThanhToan:    { type: Boolean, default: false },
   thoiGianThamGia: { type: Date, default: Date.now }
 });
 const User = mongoose.model("User", userSchema);
@@ -42,9 +43,15 @@ const User = mongoose.model("User", userSchema);
 
 // ===== LỊCH NHẮC ĐÓNG TIỀN =====
 cron.schedule("0 8 1 * *", async () => {
-  console.log("⏰ Đến giờ gửi nhắc đóng tiền!");
-  const users = await User.find({});
+  console.log("Đến giờ gửi nhắc đóng tiền!");
+  const users = await User.find({ xacNhan: true });
+
   for (const user of users) {
+    await User.updateOne(
+      { senderId: user.senderId },
+      { choDoiThanhToan: true }
+    );
+
     const ten = user.xacNhan ? user.ten : "bạn";
     await guiTinNhan(user.senderId,
       `Hi ${ten}!\n\n` +
@@ -98,20 +105,6 @@ app.post("/webhook", async (req, res) => {
 
 
 // ===== XỬ LÝ TIN NHẮN =====
-async function luuUserMoi(senderId) {
-  const exists = await User.findOne({ senderId });
-  if (!exists) {
-    await User.create({ senderId });
-    console.log(`💾 Lưu user mới: ${senderId}`);
-  }
-}
-
-async function xuLyGetStarted(senderId) {
-  await guiTinNhan(senderId,
-    "Êy bạn có thể điền nickname Facebook của bạn cho mình được không"
-  );
-}
-
 async function xuLyTinNhan(senderId, userMessage, user) {
 
   // Lệnh thêm tên
@@ -119,7 +112,7 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     const tenMoi = userMessage.split(":")[1].trim();
     if (!ALLOWED_NAMES.includes(tenMoi)) {
       ALLOWED_NAMES.push(tenMoi);
-      await guiTinNhan(senderId, `✅ Đã thêm "${tenMoi}" vào danh sách!\nHiện có ${ALLOWED_NAMES.length} tên.`);
+      await guiTinNhan(senderId, `✅ Đã thêm "${tenMoi}"!\nHiện có ${ALLOWED_NAMES.length} tên.`);
     } else {
       await guiTinNhan(senderId, `⚠️ Tên "${tenMoi}" đã có rồi!`);
     }
@@ -134,33 +127,78 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     );
     if (index > -1) {
       ALLOWED_NAMES.splice(index, 1);
-      await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}" khỏi danh sách!`);
+      await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}"!`);
     } else {
-      await guiTinNhan(senderId, `❌ Không tìm thấy tên "${tenXoa}"!`);
+      await guiTinNhan(senderId, `❌ Không tìm thấy "${tenXoa}"!`);
     }
     return;
   }
 
-  // Lệnh xem tên được phép
+  // Lệnh xem tên
   if (userMessage.toLowerCase() === "xem ten") {
     const ds = ALLOWED_NAMES.map((t, i) => `${i+1}. ${t}`).join("\n");
-    await guiTinNhan(senderId, `Danh sách tên:\n\n${ds}`);
+    await guiTinNhan(senderId, `📋 Danh sách tên:\n\n${ds}`);
     return;
   }
 
-  // Lệnh xem ai đã xác nhận
+  // Lệnh xem danh sách đã xác nhận
   if (userMessage.toLowerCase() === "xem danh sach") {
-    const users   = await User.find({ xacNhan: true });
+    const users    = await User.find({ xacNhan: true });
     const danhSach = users.map((u, i) => `${i+1}. ${u.ten}`).join("\n");
     if (users.length === 0) {
-      await guiTinNhan(senderId, "Chưa có ai xác nhận tên.");
+      await guiTinNhan(senderId, "📋 Chưa có ai xác nhận.");
     } else {
       await guiTinNhan(senderId,
-        `Đã xác nhận:\n\n${danhSach}\n\nTổng: ${users.length} người`
+        `📋 Đã xác nhận:\n\n${danhSach}\n\nTổng: ${users.length} người`
       );
     }
     return;
   }
+
+  // ===== XỬ LÝ YES/NO KHI NHẮC ĐÓNG TIỀN =====
+  if (user.choDoiThanhToan) {
+    const msg = userMessage.toLowerCase();
+
+    if (msg === "yes" || msg === "có" || msg === "co") {
+      // Gửi QR code
+      await User.updateOne({ senderId }, { choDoiThanhToan: false });
+      await guiTinNhan(senderId,
+        `🎉 Cảm ơn ${user.ten}!\n` +
+        `Đây là mã QR để thanh toán:`
+      );
+      await guiAnhQRCode(senderId);
+      await guiTinNhan(senderId,
+        `✅ Sau khi thanh toán xong báo mình biết nhé!`
+      );
+
+    } else if (msg === "no" || msg === "không" || msg === "khong") {
+      // Xóa khỏi danh sách
+      await User.updateOne(
+        { senderId },
+        { xacNhan: false, choDoiThanhToan: false }
+      );
+      const index = ALLOWED_NAMES.findIndex(
+        t => t.toLowerCase() === user.ten.toLowerCase()
+      );
+      if (index > -1) ALLOWED_NAMES.splice(index, 1);
+
+      await guiTinNhan(senderId,
+        `😢 Rất tiếc khi bạn không tiếp tục!\n` +
+        `Tên "${user.ten}" đã được xóa khỏi danh sách.\n\n` +
+        `Nếu muốn tham gia lại, nhập tên của bạn nhé!`
+      );
+
+    } else {
+      // Không phải yes/no
+      await guiTinNhan(senderId,
+        `Vui lòng trả lời:\n` +
+        `👉 YES — để tiếp tục và nhận QR thanh toán\n` +
+        `👉 NO  — để hủy đăng ký`
+      );
+    }
+    return;
+  }
+  // ============================================
 
   // Chưa xác nhận → kiểm tra tên
   if (!user.xacNhan) {
@@ -169,21 +207,20 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     );
     if (tenKhop) {
       await User.updateOne({ senderId }, { ten: tenKhop, xacNhan: true });
-      await guiTinNhan(senderId, `Cám ơn ${tenKhop} nhá!`);
-      await guiTinNhan(senderId, "Bạn cần sự hỗ trợ gì thì nhắn lên đây nhá.");
+      await guiTinNhan(senderId, `✅ Xác nhận thành công! Xin chào ${tenKhop}!`);
+      await guiTinNhan(senderId, "📅 Bạn sẽ nhận nhắc đóng tiền tự động hàng tháng. 🎉");
     } else {
       await guiTinNhan(senderId,
-        `Tên "${userMessage}" bị lỗi rồi.\n` +
-        "Bạn nhắn lại tên của bạn trên đây được không?"
+        `❌ Tên "${userMessage}" không có trong danh sách.\n` +
+        "Vui lòng nhập lại đúng họ tên:"
       );
     }
   } else {
-    // Đã xác nhận → chào bình thường
-    await guiTinNhan(senderId, `Xin chào ${user.ten}! 👋\nBạn cần hỗ trợ gì không?`);
+    await guiTinNhan(senderId,
+      `Xin chào ${user.ten}! 👋\nBạn cần hỗ trợ gì không?`
+    );
   }
 }
-
-
 // ===== GỬI TIN NHẮN =====
 async function guiTinNhan(recipientId, text) {
   try {
@@ -198,6 +235,30 @@ async function guiTinNhan(recipientId, text) {
   }
 }
 
+// Thêm hàm này bên dưới hàm guiTinNhan
+async function guiAnhQRCode(recipientId) {
+  try {
+    await axios.post(
+      "https://graph.facebook.com/v19.0/me/messages",
+      {
+        recipient: { id: recipientId },
+        message: {
+          attachment: {
+            type: "image",
+            payload: {
+              url: QR_CODE_URL,
+              is_reusable: true
+            }
+          }
+        }
+      },
+      { params: { access_token: PAGE_ACCESS_TOKEN } }
+    );
+    console.log("📤 Đã gửi QR code!");
+  } catch (err) {
+    console.error("❌ Lỗi gửi QR:", err.response?.data || err.message);
+  }
+}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
