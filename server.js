@@ -10,7 +10,7 @@ app.use(express.json());
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN      = process.env.VERIFY_TOKEN || "mytoken123";
 const MONGODB_URI       = process.env.MONGODB_URI;
-const QR_CODE_URL       = "https://i.ibb.co/9m1Np9PY/tenfile.jpg";
+const QR_CODE_URL       = "https://i.ibb.co/9m1Np9PY/QR_code.png";
 const DANH_SACH_TEN_URL ="https://i.ibb.co/7dTD0tYm/danh_sach_ten.png";
 let ALLOWED_NAMES = [
   "Quyên", "Trúc Ngân", "Thiên An", "Hao Huynh",
@@ -59,11 +59,15 @@ async function luuUserMoi(senderId) {
 async function xuLyGetStarted(senderId) {
   await guiTinNhan(
     senderId,
-    "Êy bạn có thể điền nickname Facebook của bạn cho mình được không"
+    "Êy bạn có thể điền nickname Facebook của bạn cho mình được không\n\n" +
+    "Bạn tìm tên mình trong danh sách dưới đây nhé:"
   );
-  await guiAnhDanhSachTen(senderId);
+    for (let i = 0; i < ALLOWED_NAMES.length; i += nhomSize) {
+    const nhom = ALLOWED_NAMES.slice(i, i + nhomSize);
+    const text = nhom.map((t, j) => `${i + j + 1}. ${t}`).join("\n");
+    await guiTinNhan(senderId, text);
+  }
 }
- 
  
 // ===== LỊCH NHẮC ĐÓNG TIỀN =====
 cron.schedule("27 21 4 * *", async () => {
@@ -80,6 +84,8 @@ cron.schedule("27 21 4 * *", async () => {
     await guiTinNhan(user.senderId,
       `Hi ${ten}!\n\n` +
       `Tới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?`
+        `YES — để tiếp tục\n` +
+        `NO  — để hủy đăng ký`
     );
   }
 }, { timezone: "Asia/Ho_Chi_Minh" });
@@ -232,12 +238,15 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     } else {
       await guiTinNhan(senderId,
         `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
-        "Bạn nhập tên của bạn theo đúng hình này giúp mình"
+        "Bạn tìm tên mình trong danh sách này nhé:"
       );
-      await guiAnhDanhSachTen(senderId);
-    }
-  } 
+      const nhomSize = 10;
+      for (let i = 0; i < ALLOWED_NAMES.length; i += nhomSize) {
+  const nhom = ALLOWED_NAMES.slice(i, i + nhomSize);
+  const text = nhom.map((t, j) => `${i + j + 1}. ${t}`).join("\n");
+  await guiTinNhan(senderId, text);
 }
+
 // ===== GỬI TIN NHẮN =====
 async function guiTinNhan(recipientId, text) {
   try {
