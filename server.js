@@ -273,29 +273,6 @@ async function guiAnhQRCode(recipientId) {
 }
 
 // ===== GỬI ẢNH DANH SÁCH TÊN =====
-async function guiAnhDanhSachTen(recipientId) {
-  try {
-    await axios.post(
-      "https://graph.facebook.com/v19.0/me/messages",
-      {
-        recipient: { id: recipientId },
-        message: {
-          attachment: {
-            type: "image",
-            payload: {
-              url: DANH_SACH_TEN_URL,
-              is_reusable: true
-            }
-          }
-        }
-      },
-      { params: { access_token: PAGE_ACCESS_TOKEN } }
-    );
-    console.log("Đã gửi ảnh danh sách tên!");
-  } catch (err) {
-    console.error("Lỗi gửi ảnh:", err.response?.data || err.message);
-  }
-}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
