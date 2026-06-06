@@ -298,7 +298,7 @@ async function guiAnhDanhSachTen(recipientId) {
         recipient: { id: recipientId },
         message: {
           attachment: {
-            type: "image",
+            type: "file",
             payload: {
               url: DANH_SACH_TEN_URL,
               is_reusable: true
