@@ -310,6 +310,8 @@ async function xuLyTinNhan(senderId, userMessage, user) {
         );
       } else {
         await guiTinNhan(senderId, "Có vấn đề phát sinh thì bạn nhắn cho mình nha.");
+      }
+
       } else {
       await guiTinNhan(senderId,
         `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
