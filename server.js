@@ -64,11 +64,10 @@ async function xuLyGetStarted(senderId) {
     "Bạn tìm tên mình trong danh sách dưới đây nhé:"
   );
     await guiAnhDanhSachTen(senderId);
-  }
 }
  
 // ===== LỊCH NHẮC ĐÓNG TIỀN =====
-cron.schedule("46 13 6 * *", async () => {
+cron.schedule("18 14 6 * *", async () => {
   console.log("Gửi nhắc đóng tiền");
   const users = await User.find({ xacNhan: true });
 
