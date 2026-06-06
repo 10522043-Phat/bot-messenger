@@ -114,7 +114,7 @@ cron.schedule("20 14 6 * *", async () => {
 }, { timezone: "Asia/Ho_Chi_Minh" });
 
 // Tắt kỳ thu tiền vào ngày 10 hàng tháng lúc 8:00 sáng
-cron.schedule("0 8 10 * *", () => {
+cron.schedule("0 8 10 * *", async () => {
   await setSettings("dangThuTien", false);
   console.log("Đã đóng kỳ thu tiền tháng này");
 }, { timezone: "Asia/Ho_Chi_Minh" });
