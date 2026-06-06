@@ -12,7 +12,7 @@ const VERIFY_TOKEN      = process.env.VERIFY_TOKEN || "mytoken123";
 const MONGODB_URI       = process.env.MONGODB_URI;
 const QR_CODE_URL       = process.env.QR_CODE_URL;
 const DANH_SACH_TEN_URL = process.env.DANH_SACH_TEN_URL;
-const nhomSize          = 10;
+
 let ALLOWED_NAMES = [
   "Quyên", "Trúc Ngân", "Thiên An", "Hao Huynh",
   "Trần Agness", "Bảo Duy", "Ryan Nguyen", "Gia Bảo",
@@ -63,10 +63,7 @@ async function xuLyGetStarted(senderId) {
     "Êy bạn có thể điền nickname Facebook của bạn cho mình được không\n\n" +
     "Bạn tìm tên mình trong danh sách dưới đây nhé:"
   );
-    for (let i = 0; i < ALLOWED_NAMES.length; i += nhomSize) {
-    const nhom = ALLOWED_NAMES.slice(i, i + nhomSize);
-    const text = nhom.map((t, j) => `${i + j + 1}. ${t}`).join("\n");
-    await guiTinNhan(senderId, text);
+    await guiAnhDanhSachTen(senderId);
   }
 }
  
@@ -241,12 +238,7 @@ async function xuLyTinNhan(senderId, userMessage, user) {
         `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
         "Bạn tìm tên mình trong danh sách này nhé:"
       );
-      const nhomSize = 10;
-      for (let i = 0; i < ALLOWED_NAMES.length; i += nhomSize) {
-  const nhom = ALLOWED_NAMES.slice(i, i + nhomSize);
-  const text = nhom.map((t, j) => `${i + j + 1}. ${t}`).join("\n");
-  await guiTinNhan(senderId, text);
-       }
+      await guiAnhDanhSachTen(senderId);
      }
    }
  }
@@ -298,7 +290,7 @@ async function guiAnhDanhSachTen(recipientId) {
         recipient: { id: recipientId },
         message: {
           attachment: {
-            type: "file",
+            type: "image",
             payload: {
               url: DANH_SACH_TEN_URL,
               is_reusable: true
