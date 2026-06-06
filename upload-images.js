@@ -33,8 +33,8 @@ async function uploadLenImgBB(tenFile) {
 async function main() {
   console.log("📤 Đang upload ảnh lên ImgBB...\n");
 
-  const qrUrl  = await uploadLenImgBB("QR_code.png");
-  const dsUrl  = await uploadLenImgBB("danh_sach_ten.png");
+  const qrUrl  = await uploadLenImgBB("QR_code.jpg");
+  const dsUrl  = await uploadLenImgBB("danh_sach_ten.jpg");
 
   console.log("\n📋 Copy 2 dòng này vào .env của bạn:");
   console.log(`QR_CODE_URL=${qrUrl}`);
