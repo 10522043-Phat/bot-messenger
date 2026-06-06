@@ -83,7 +83,7 @@ cron.schedule("27 21 4 * *", async () => {
     const ten = user.xacNhan ? user.ten : "bạn";
     await guiTinNhan(user.senderId,
       `Hi ${ten}!\n\n` +
-      `Tới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?`
+      `Tới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?\n\n` +
         `YES — để tiếp tục\n` +
         `NO  — để hủy đăng ký`
     );
@@ -245,7 +245,10 @@ async function xuLyTinNhan(senderId, userMessage, user) {
   const nhom = ALLOWED_NAMES.slice(i, i + nhomSize);
   const text = nhom.map((t, j) => `${i + j + 1}. ${t}`).join("\n");
   await guiTinNhan(senderId, text);
-}
+       }
+     }
+   }
+ }
 
 // ===== GỬI TIN NHẮN =====
 async function guiTinNhan(recipientId, text) {
