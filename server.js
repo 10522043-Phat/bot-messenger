@@ -10,8 +10,8 @@ app.use(express.json());
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN      = process.env.VERIFY_TOKEN || "mytoken123";
 const MONGODB_URI       = process.env.MONGODB_URI;
-const QR_CODE_URL       = "https://i.ibb.co/9m1Np9PY/QR_code.png";
-const DANH_SACH_TEN_URL = "https://i.ibb.co/7dTD0tYm/danh_sach_ten.png";
+const QR_CODE_URL       = process.env.QR_CODE_URL;
+const DANH_SACH_TEN_URL = process.env.DANH_SACH_TEN_URL;
 let ALLOWED_NAMES = [
   "Quyên", "Trúc Ngân", "Thiên An", "Hao Huynh",
   "Trần Agness", "Bảo Duy", "Ryan Nguyen", "Gia Bảo",
@@ -22,7 +22,7 @@ let ALLOWED_NAMES = [
   "Khang Tran", "Đăng Khoa", "Xuân Khoa",
   "Nguyên Ngọc Khánh Uyên", "Nguyễn Trường Thịnh",
   "Son Le", "Hà Minh Khải", "Kenneth Reichert", "Trần Bình Minh",
-  "Công Thành", "Khai Le", "Hương Võ", "Vũ Kha"
+"Công Thành", "Khai Le", "Hương Võ", "Vũ Kha"
 ];
 // ====================
 
@@ -36,7 +36,7 @@ const userSchema = new mongoose.Schema({
   senderId:        { type: String, required: true, unique: true },
   ten:             { type: String, default: "Chưa xác nhận" },
   xacNhan:         { type: Boolean, default: false },
-  choDoiThanhToan: { type: Boolean, default: false },
+  choDoiThanhToan:    { type: Boolean, default: false },
   thoiGianThamGia: { type: Date, default: Date.now }
 });
 const User = mongoose.model("User", userSchema);
@@ -55,8 +55,6 @@ async function luuUserMoi(senderId) {
   }
 }
 
-
-
 // ===== CHÀO USER MỚI =====
 async function xuLyGetStarted(senderId) {
   await guiTinNhan(
@@ -64,9 +62,13 @@ async function xuLyGetStarted(senderId) {
     "Êy bạn có thể điền nickname Facebook của bạn cho mình được không\n\n" +
     "Bạn tìm tên mình trong danh sách dưới đây nhé:"
   );
-  await guiAnhDanhSachTen(senderId);
+    for (let i = 0; i < ALLOWED_NAMES.length; i += nhomSize) {
+    const nhom = ALLOWED_NAMES.slice(i, i + nhomSize);
+    const text = nhom.map((t, j) => `${i + j + 1}. ${t}`).join("\n");
+    await guiTinNhan(senderId, text);
+  }
 }
-
+ 
 // ===== LỊCH NHẮC ĐÓNG TIỀN =====
 cron.schedule("27 21 4 * *", async () => {
   console.log("Gửi nhắc đóng tiền");
@@ -81,9 +83,9 @@ cron.schedule("27 21 4 * *", async () => {
     const ten = user.xacNhan ? user.ten : "bạn";
     await guiTinNhan(user.senderId,
       `Hi ${ten}!\n\n` +
-      `Tới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?\n\n` +
-      `YES — để tiếp tục\n` +
-      `NO  — để hủy đăng ký`
+      `Tới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?`
+        `YES — để tiếp tục\n` +
+        `NO  — để hủy đăng ký`
     );
   }
 }, { timezone: "Asia/Ho_Chi_Minh" });
@@ -188,12 +190,18 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     const msg = userMessage.toLowerCase();
 
     if (msg === "yes" || msg === "có" || msg === "co") {
+      // Gửi QR code
       await User.updateOne({ senderId }, { choDoiThanhToan: false });
-      await guiTinNhan(senderId, `Vậy bạn thanh toán giúp mình nhé`);
+      await guiTinNhan(senderId,
+        `Vậy bạn thanh toán giúp mình nhé` 
+      );
       await guiAnhQRCode(senderId);
-      await guiTinNhan(senderId, `Có gì bạn gửi ảnh thanh toán lên nhóm giúp mình nhé`);
+      await guiTinNhan(senderId,
+        `Có gì bạn gửi ảnh thanh toán lên nhóm giúp mình nhé`
+      );
 
     } else if (msg === "no" || msg === "không" || msg === "khong") {
+      // Xóa khỏi danh sách
       await User.updateOne(
         { senderId },
         { xacNhan: false, choDoiThanhToan: false }
@@ -202,9 +210,13 @@ async function xuLyTinNhan(senderId, userMessage, user) {
         t => t.toLowerCase() === user.ten.toLowerCase()
       );
       if (index > -1) ALLOWED_NAMES.splice(index, 1);
-      await guiTinNhan(senderId, `Vậy bạn out tài khoản giúp mình nhe`);
+
+      await guiTinNhan(senderId,
+        `Vậy bạn out tài khoản giúp mình nhe`
+      );
 
     } else {
+      // Không phải yes/no
       await guiTinNhan(senderId,
         `YES — để tiếp tục và nhận QR thanh toán\n` +
         `NO  — để hủy đăng ký`
@@ -228,9 +240,11 @@ async function xuLyTinNhan(senderId, userMessage, user) {
         `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
         "Bạn tìm tên mình trong danh sách này nhé:"
       );
-      await guiAnhDanhSachTen(senderId);
-    }
-  }
+      const nhomSize = 10;
+      for (let i = 0; i < ALLOWED_NAMES.length; i += nhomSize) {
+  const nhom = ALLOWED_NAMES.slice(i, i + nhomSize);
+  const text = nhom.map((t, j) => `${i + j + 1}. ${t}`).join("\n");
+  await guiTinNhan(senderId, text);
 }
 
 // ===== GỬI TIN NHẮN =====
@@ -247,7 +261,7 @@ async function guiTinNhan(recipientId, text) {
   }
 }
 
-// ===== GỬI ẢNH QR CODE =====
+// Thêm hàm này bên dưới hàm guiTinNhan
 async function guiAnhQRCode(recipientId) {
   try {
     await axios.post(
@@ -272,8 +286,29 @@ async function guiAnhQRCode(recipientId) {
   }
 }
 
-// ===== GỬI ẢNH DANH SÁCH TÊN =====
-
+async function guiAnhDanhSachTen(recipientId) {
+  try {
+    await axios.post(
+      "https://graph.facebook.com/v19.0/me/messages",
+      {
+        recipient: { id: recipientId },
+        message: {
+          attachment: {
+            type: "image",
+            payload: {
+              url: DANH_SACH_TEN_URL,
+              is_reusable: true
+            }
+          }
+        }
+      },
+      { params: { access_token: PAGE_ACCESS_TOKEN } }
+    );
+    console.log("Đã gửi ảnh danh sách tên!");
+  } catch (err) {
+    console.error("Lỗi gửi ảnh:", err.response?.data || err.message);
+  }
+}
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server chạy tại port ${PORT}`);
