@@ -67,7 +67,7 @@ async function xuLyGetStarted(senderId) {
 }
  
 // ===== LỊCH NHẮC ĐÓNG TIỀN =====
-cron.schedule("18 14 6 * *", async () => {
+cron.schedule("20 14 6 * *", async () => {
   console.log("Gửi nhắc đóng tiền");
   const users = await User.find({ xacNhan: true });
 
