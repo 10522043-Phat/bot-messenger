@@ -12,6 +12,10 @@ const VERIFY_TOKEN      = process.env.VERIFY_TOKEN || "mytoken123";
 const MONGODB_URI       = process.env.MONGODB_URI;
 const QR_CODE_URL       = process.env.QR_CODE_URL;
 const DANH_SACH_TEN_URL = process.env.DANH_SACH_TEN_URL;
+const ADMIN_IDS = [
+  "28079494701637950",  // Trần Agness
+  "35732182966430161",          // Admin
+];
 
 let ALLOWED_NAMES = [
   "Quyên", "Trúc Ngân", "Thiên An", "Hao Huynh",
@@ -25,6 +29,7 @@ let ALLOWED_NAMES = [
   "Son Le", "Hà Minh Khải", "Kenneth Reichert", "Trần Bình Minh",
 "Công Thành", "Khai Le", "Hương Võ", "Vũ Kha"
 ];
+
 // ====================
 
 
@@ -42,6 +47,29 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model("User", userSchema);
 
+const settingsSchema = new mongoose.Schema({
+  key:   { type: String, required: true, unique: true },
+  value: { type: mongoose.Schema.Types.Mixed, default: null }
+});
+const Settings = mongoose.model("Settings", settingsSchema);
+
+async function getSettings(key) {
+  const doc = await Settings.findOne({ key });
+  return doc ? doc.value : null;
+}
+
+async function setSettings(key, value) {
+  await Settings.findOneAndUpdate(
+    { key },
+    { value },
+    { upsert: true, new: true }
+  );
+}
+
+// ===== KIỂM TRA ADMIN =====
+function laAdmin(senderId) {
+  return ADMIN_IDS.includes(senderId);
+}
 
 // ===== LƯU USER MỚI =====
 async function luuUserMoi(senderId) {
@@ -69,13 +97,11 @@ async function xuLyGetStarted(senderId) {
 // ===== LỊCH NHẮC ĐÓNG TIỀN =====
 cron.schedule("20 14 6 * *", async () => {
   console.log("Gửi nhắc đóng tiền");
-  const users = await User.find({ xacNhan: true });
+  await setSettings("dangThuTien", true);
 
+  const users = await User.find({ xacNhan: true });
   for (const user of users) {
-    await User.updateOne(
-      { senderId: user.senderId },
-      { choDoiThanhToan: true }
-    );
+    await User.updateOne({ senderId: user.senderId }, { choDoiThanhToan: true });
 
     const ten = user.xacNhan ? user.ten : "bạn";
     await guiTinNhan(user.senderId,
@@ -85,6 +111,12 @@ cron.schedule("20 14 6 * *", async () => {
         `NO  — để hủy đăng ký`
     );
   }
+}, { timezone: "Asia/Ho_Chi_Minh" });
+
+// Tắt kỳ thu tiền vào ngày 10 hàng tháng lúc 8:00 sáng
+cron.schedule("0 8 10 * *", () => {
+  await setSettings("dangThuTien", false);
+  console.log("Đã đóng kỳ thu tiền tháng này");
 }, { timezone: "Asia/Ho_Chi_Minh" });
 
 
@@ -133,6 +165,23 @@ app.post("/webhook", async (req, res) => {
 
 // ===== XỬ LÝ TIN NHẮN =====
 async function xuLyTinNhan(senderId, userMessage, user) {
+
+  // ===== LỆNH ADMIN =====
+  const adminLenh = [
+    "xem danh sach", "xem ten", "bat thu tien",
+    "tat thu tien", "trang thai"
+  ];
+  const laLenhAdmin =
+    adminLenh.includes(userMessage.toLowerCase()) ||
+    userMessage.toLowerCase().startsWith("them:") ||
+    userMessage.toLowerCase().startsWith("xoa:");
+
+  if (laLenhAdmin) {
+    if (!laAdmin(senderId)) {
+      await guiTinNhan(senderId, "Bạn không có quyền dùng lệnh này!");
+      return;
+    }
+  }
 
   // Lệnh thêm tên
   if (userMessage.toLowerCase().startsWith("them:")) {
@@ -223,6 +272,25 @@ async function xuLyTinNhan(senderId, userMessage, user) {
   }
   // ============================================
 
+  // Lệnh bật/tắt kỳ thu tiền thủ công
+  if (userMessage.toLowerCase() === "bat thu tien") {
+    await setSettings("dangThuTien", true);
+    await guiTinNhan(senderId, "✅ Đã bật kỳ thu tiền!");
+    return;
+  }
+
+  if (userMessage.toLowerCase() === "tat thu tien") {
+    await setSettings("dangThuTien", false);
+    await guiTinNhan(senderId, "✅ Đã tắt kỳ thu tiền!");
+    return;
+  }
+
+  if (userMessage.toLowerCase() === "trang thai") {
+    const dangThuTien = await getSettings("dangThuTien");
+    await guiTinNhan(senderId, `📊 Kỳ thu tiền: ${dangThuTien ? "🟢 Đang bật" : "🔴 Đang tắt"}`);
+    return;
+  }
+
   // Chưa xác nhận → kiểm tra tên
   if (!user.xacNhan) {
     const tenKhop = ALLOWED_NAMES.find(
@@ -231,8 +299,18 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     if (tenKhop) {
       await User.updateOne({ senderId }, { ten: tenKhop, xacNhan: true });
       await guiTinNhan(senderId, `Xác nhận thành công! Xin chào ${tenKhop}!`);
-      await guiTinNhan(senderId, "Có vấn đề phát sinh thì bạn nhắn cho mình nha.");
-    } else {
+
+      const dangThuTien = await getSettings("dangThuTien");
+      if (dangThuTien) {
+        await User.updateOne({ senderId }, { choDoiThanhToan: true });
+        await guiTinNhan(senderId,
+          `Tháng này đang thu tiền rồi bạn có muốn tiếp tục không?\n\n` +
+          `YES — để tiếp tục\n` +
+          `NO  — để hủy đăng ký`
+        );
+      } else {
+        await guiTinNhan(senderId, "Có vấn đề phát sinh thì bạn nhắn cho mình nha.");
+      } else {
       await guiTinNhan(senderId,
         `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
         "Bạn tìm tên mình trong danh sách này nhé:"
