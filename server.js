@@ -16,7 +16,6 @@ const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 const VERIFY_TOKEN      = process.env.VERIFY_TOKEN || "mytoken123";
 const MONGODB_URI       = process.env.MONGODB_URI;
 const QR_CODE_URL       = process.env.QR_CODE_URL;
-const DANH_SACH_TEN_URL = process.env.DANH_SACH_TEN_URL;
 const ADMIN_IDS = [
   "28079494701637950",  // Trần Agness
   "35732182966430161",          // Admin
