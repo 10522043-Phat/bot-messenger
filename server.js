@@ -71,7 +71,7 @@ async function setSettings(key, value) {
   await Settings.findOneAndUpdate(
     { key },
     { value },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: 'after' }
   );
 }
 
@@ -200,7 +200,7 @@ async function luuUserMoi(senderId) {
     const truoc = await User.findOneAndUpdate(
       { senderId },
       { $setOnInsert: { senderId } },
-      { upsert: true, new: false }
+      { upsert: true, returnDocument: 'before' }
     );
     const laMoi = truoc === null;
     if (laMoi) console.log(`Đã lưu user mới: ${senderId}`);
