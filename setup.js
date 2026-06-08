@@ -1,3 +1,4 @@
+require("dotenv").config();
 const axios = require("axios");
 
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN; // Thay token vào đây
