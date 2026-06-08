@@ -171,7 +171,7 @@ async function nhacNguoiChuaDong() {
     if (user) {
       await guiTinNhan(
         user.senderId,
-        `Hi ${user.ten}! 👋\n\n` +
+        `Hi ${user.ten}!\n\n` +
         `Mình thấy bạn chưa đóng tiền tháng này nè 😅\n` +
         `Bạn thanh toán sớm giúp mình nhé!\n\n` +
         `YES — để nhận mã QR thanh toán\n` +
@@ -492,7 +492,7 @@ const adminLenh = [
         `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
         "Bạn tìm tên mình trong danh sách này nhé:"
       );
-      await guiAnhDanhSachTen(senderId);
+    await guiAnhDanhSachTen(senderId);
      }
    }
  }
@@ -537,28 +537,12 @@ async function guiAnhQRCode(recipientId) {
 }
 
 async function guiAnhDanhSachTen(recipientId) {
-  try {
-    await axios.post(
-      "https://graph.facebook.com/v19.0/me/messages",
-      {
-        recipient: { id: recipientId },
-        message: {
-          attachment: {
-            type: "image",
-            payload: {
-              url: DANH_SACH_TEN_URL,
-              is_reusable: true
-            }
-          }
-        }
-      },
-      { params: { access_token: PAGE_ACCESS_TOKEN } }
-    );
-    console.log("Đã gửi ảnh danh sách tên!");
-  } catch (err) {
-    console.error("Lỗi gửi ảnh:", err.response?.data || err.message);
-  }
+  const savedNames = await getSettings("allowedNames");
+  const danhSach = savedNames || ALLOWED_NAMES;
+  const ds = danhSach.map((t, i) => `${i + 1}. ${t}`).join("\n");
+  await guiTinNhan(recipientId, `Danh sách thành viên:\n\n${ds}`);
 }
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server chạy tại port ${PORT}`);
