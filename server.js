@@ -40,7 +40,11 @@ let ALLOWED_NAMES = [
 
 // ===== KẾT NỐI MONGODB =====
 mongoose.connect(MONGODB_URI)
-  .then(() => console.log("Kết nối MongoDB thành công"))
+  .then(async () => {
+    console.log("Kết nối MongoDB thành công");
+    const saved = await getSettings("allowedNames");
+    if (saved) ALLOWED_NAMES = saved;
+  })
   .catch(err => console.error("Lỗi MongoDB:", err));
 
 const userSchema = new mongoose.Schema({
@@ -108,7 +112,7 @@ function locChuaDong(rows, label) {
     const trangThai = (row[3] || "").toString().toUpperCase().trim();
 
     if (trangThai === "FALSE" || trangThai === "") {
-      result.push({ ten, label }); // label để biết từ file nào
+      result.push({ ten, sheet }); // label để biết từ file nào
     }
   }
   return result;
@@ -147,6 +151,7 @@ async function nhacNguoiChuaDong() {
 
   if (chuaDongList.length === 0) {
     console.log("✅ Mọi người đã đóng tiền hết rồi!");
+    await setSettings("lastSheetReminder", new Date().toISOString());
     return { nhac: 0, tongChuaDong: 0 };
   }
 
@@ -192,13 +197,17 @@ function laAdmin(senderId) {
 // ===== LƯU USER MỚI =====
 async function luuUserMoi(senderId) {
   try {
-    const existing = await User.findOne({ senderId });
-    if (!existing) {
-      await User.create({ senderId });
-      console.log(`Đã lưu user mới: ${senderId}`);
-    }
+    const truoc = await User.findOneAndUpdate(
+      { senderId },
+      { $setOnInsert: { senderId } },
+      { upsert: true, new: false }
+    );
+    const laMoi = truoc === null;
+    if (laMoi) console.log(`Đã lưu user mới: ${senderId}`);
+    return laMoi;
   } catch (err) {
     console.error("Lỗi lưu user:", err.message);
+    return false;
   }
 }
 
@@ -282,8 +291,8 @@ app.post("/webhook", async (req, res) => {
         console.log(`Tin nhắn từ ${senderId}: ${msg}`);
         let user = await User.findOne({ senderId });
         if (!user) {
-          await luuUserMoi(senderId);
-          await xuLyGetStarted(senderId);
+          const laMoi = await luuUserMoi(senderId);
+          if (laMoi) await xuLyGetStarted(senderId);
         } else {
           await xuLyTinNhan(senderId, msg, user);
         }
@@ -322,6 +331,7 @@ const adminLenh = [
     const tenMoi = userMessage.split(":")[1].trim();
     if (!ALLOWED_NAMES.includes(tenMoi)) {
       ALLOWED_NAMES.push(tenMoi);
+      await setSettings("allowedNames", ALLOWED_NAMES);
       await guiTinNhan(senderId, `✅ Đã thêm "${tenMoi}"!\nHiện có ${ALLOWED_NAMES.length} tên.`);
     } else {
       await guiTinNhan(senderId, `⚠️ Tên "${tenMoi}" đã có rồi!`);
@@ -337,6 +347,7 @@ const adminLenh = [
     );
     if (index > -1) {
       ALLOWED_NAMES.splice(index, 1);
+      await setSettings("allowedNames", ALLOWED_NAMES);
       await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}"!`);
     } else {
       await guiTinNhan(senderId, `❌ Không tìm thấy "${tenXoa}"!`);
@@ -390,7 +401,7 @@ const adminLenh = [
         t => t.toLowerCase() === user.ten.toLowerCase()
       );
       if (index > -1) ALLOWED_NAMES.splice(index, 1);
-
+      await setSettings("allowedNames", ALLOWED_NAMES);
       await guiTinNhan(senderId,
         `Vậy bạn out tài khoản giúp mình nhe`
       );
