@@ -94,7 +94,7 @@ async function docMotSheet(sheets, spreadsheetId, sheetName) {
 }
 
 // Lọc tên chưa đóng từ 1 mảng rows
-function locChuaDong(rows, label) {
+function locChuaDong(rows, sheet) {
   const result = [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -112,7 +112,7 @@ function locChuaDong(rows, label) {
     const trangThai = (row[3] || "").toString().toUpperCase().trim();
 
     if (trangThai === "FALSE" || trangThai === "") {
-      result.push({ ten, sheet }); // label để biết từ file nào
+      result.push({ ten, sheet }); // sheet để biết từ file nào
     }
   }
   return result;
@@ -140,7 +140,7 @@ async function layDanhSachChuaDong() {
     if (!trung) tatCa.push(item);
   }
 
-  return tatCa; // [{ ten: "Quyên", label: "File 1" }, ...]
+  return tatCa; // [{ ten: "Quyên", sheet: "File 1" }, ...]
 }
 
 // Gửi nhắc tới từng người chưa đóng
@@ -157,11 +157,11 @@ async function nhacNguoiChuaDong() {
 
   console.log(
     `📋 Chưa đóng (${chuaDongList.length}):`,
-    chuaDongList.map(x => `${x.ten} [${x.label}]`).join(", ")
+    chuaDongList.map(x => `${x.ten} [${x.sheet}]`).join(", ")
   );
 
   let soNguoiNhac = 0;
-  for (const { ten, label } of chuaDongList) {
+  for (const { ten, sheet } of chuaDongList) {
     const escaped = ten.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const user    = await User.findOne({
       xacNhan: true,
@@ -180,7 +180,7 @@ async function nhacNguoiChuaDong() {
       await User.updateOne({ senderId: user.senderId }, { choDoiThanhToan: true });
       soNguoiNhac++;
     } else {
-      console.log(`⚠️  "${ten}" [${label}] chưa có trong bot`);
+      console.log(`⚠️  "${ten}" [${sheet}] chưa có trong bot`);
     }
   }
 
@@ -284,8 +284,8 @@ app.post("/webhook", async (req, res) => {
       const senderId = event.sender.id;
 
       if (event.postback?.payload === "GET_STARTED") {
-        await luuUserMoi(senderId);
-        await xuLyGetStarted(senderId);
+        const laMoi = await luuUserMoi(senderId);
+        if (laMoi) await xuLyGetStarted(senderId);
       } else if (event.message?.text) {
         const msg = event.message.text.trim();
         console.log(`Tin nhắn từ ${senderId}: ${msg}`);
