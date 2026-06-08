@@ -4,6 +4,11 @@ const axios    = require("axios");
 const cron     = require("node-cron");
 const mongoose = require("mongoose");
 const app      = express();
+const { google } = require("googleapis");
+const SPREADSHEET_ID_1 = process.env.SPREADSHEET_ID_1;
+const SPREADSHEET_ID_2 = process.env.SPREADSHEET_ID_2;
+const SHEET1_NAME    = process.env.SHEET1_NAME || "Invoice";
+const SHEET2_NAME    = process.env.SHEET2_NAME || "Invoice 2";
 app.use(express.json());
 
 // ===== CẤU HÌNH =====
@@ -66,6 +71,119 @@ async function setSettings(key, value) {
   );
 }
 
+async function taoSheetsClient() {
+  return google.sheets({ version: "v4", auth: process.env.GOOGLE_API_KEY });
+}
+
+// Đọc 1 file sheet cụ thể theo spreadsheetId + tên tab
+async function docMotSheet(sheets, spreadsheetId, sheetName) {
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!G:J`,  // G = Tên | J = Đóng tiền (index 3)
+    });
+    return res.data.values || [];
+  } catch (err) {
+    console.error(`Lỗi đọc sheet "${sheetName}" (${spreadsheetId}):`, err.message);
+    return [];
+  }
+}
+
+// Lọc tên chưa đóng từ 1 mảng rows
+function locChuaDong(rows, label) {
+  const result = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !row[0]) continue;
+
+    const ten = row[0].trim();
+
+    // Bỏ qua hàng tiêu đề
+    if (
+      i === 0 &&
+      (ten.toLowerCase().includes("tên") || ten.toLowerCase().includes("name"))
+    ) continue;
+
+    // row[3] = cột J (index 3 trong range G:J)
+    const trangThai = (row[3] || "").toString().toUpperCase().trim();
+
+    if (trangThai === "FALSE" || trangThai === "") {
+      result.push({ ten, label }); // label để biết từ file nào
+    }
+  }
+  return result;
+}
+
+// Đọc cả 2 file Google Sheet, gộp lại và loại trùng tên
+async function layDanhSachChuaDong() {
+  const sheets = await taoSheetsClient();
+
+  // Đọc song song cả 2 file cùng lúc
+  const [rows1, rows2] = await Promise.all([
+    docMotSheet(sheets, SPREADSHEET_ID_1, SHEET1_NAME),
+    docMotSheet(sheets, SPREADSHEET_ID_2, SHEET2_NAME),
+  ]);
+
+  const ds1 = locChuaDong(rows1, "File 1");
+  const ds2 = locChuaDong(rows2, "File 2");
+
+  // Gộp, loại trùng tên (case-insensitive)
+  const tatCa = [...ds1];
+  for (const item of ds2) {
+    const trung = tatCa.some(
+      x => x.ten.toLowerCase() === item.ten.toLowerCase()
+    );
+    if (!trung) tatCa.push(item);
+  }
+
+  return tatCa; // [{ ten: "Quyên", label: "File 1" }, ...]
+}
+
+// Gửi nhắc tới từng người chưa đóng
+async function nhacNguoiChuaDong() {
+  console.log("🔍 Check 2 Google Sheet để nhắc đóng tiền...");
+
+  const chuaDongList = await layDanhSachChuaDong();
+
+  if (chuaDongList.length === 0) {
+    console.log("✅ Mọi người đã đóng tiền hết rồi!");
+    return { nhac: 0, tongChuaDong: 0 };
+  }
+
+  console.log(
+    `📋 Chưa đóng (${chuaDongList.length}):`,
+    chuaDongList.map(x => `${x.ten} [${x.label}]`).join(", ")
+  );
+
+  let soNguoiNhac = 0;
+  for (const { ten, label } of chuaDongList) {
+    const escaped = ten.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const user    = await User.findOne({
+      xacNhan: true,
+      ten: { $regex: new RegExp(`^${escaped}$`, "i") },
+    });
+
+    if (user) {
+      await guiTinNhan(
+        user.senderId,
+        `Hi ${user.ten}! 👋\n\n` +
+        `Mình thấy bạn chưa đóng tiền tháng này nè 😅\n` +
+        `Bạn thanh toán sớm giúp mình nhé!\n\n` +
+        `YES — để nhận mã QR thanh toán\n` +
+        `NO  — để hủy đăng ký`
+      );
+      await User.updateOne({ senderId: user.senderId }, { choDoiThanhToan: true });
+      soNguoiNhac++;
+    } else {
+      console.log(`⚠️  "${ten}" [${label}] chưa có trong bot`);
+    }
+  }
+
+  console.log(`✅ Đã nhắc ${soNguoiNhac}/${chuaDongList.length} người`);
+  await setSettings("lastSheetReminder", new Date().toISOString());
+  return { nhac: soNguoiNhac, tongChuaDong: chuaDongList.length };
+}
+
 // ===== KIỂM TRA ADMIN =====
 function laAdmin(senderId) {
   return ADMIN_IDS.includes(senderId);
@@ -119,6 +237,21 @@ cron.schedule("0 8 10 * *", async () => {
   console.log("Đã đóng kỳ thu tiền tháng này");
 }, { timezone: "Asia/Ho_Chi_Minh" });
 
+// ===== CRON NHẮC MỖI 2 NGÀY DỰA TRÊN GOOGLE SHEETS =====
+// Chạy lúc 9:00 sáng vào các ngày lẻ (1, 3, 5, 7...),
+// kết hợp kiểm tra Settings để đảm bảo đúng 2 ngày/lần
+cron.schedule("0 9 */2 * *", async () => {
+  // Kiểm tra xem đã đủ 48 tiếng kể từ lần nhắc trước chưa
+  const lastRun = await getSettings("lastSheetReminder");
+  if (lastRun) {
+    const diffHours = (Date.now() - new Date(lastRun).getTime()) / (1000 * 60 * 60);
+    if (diffHours < 47) {
+      console.log(`⏳ Mới nhắc ${Math.floor(diffHours)}h trước, chưa đủ 2 ngày`);
+      return;
+    }
+  }
+  await nhacNguoiChuaDong();
+}, { timezone: "Asia/Ho_Chi_Minh" });
 
 // ===== WEBHOOK =====
 app.get("/webhook", (req, res) => {
@@ -167,10 +300,11 @@ app.post("/webhook", async (req, res) => {
 async function xuLyTinNhan(senderId, userMessage, user) {
 
   // ===== LỆNH ADMIN =====
-  const adminLenh = [
-    "xem danh sach", "xem ten", "bat thu tien",
-    "tat thu tien", "trang thai"
-  ];
+const adminLenh = [
+  "xem danh sach", "xem ten", "bat thu tien",
+  "tat thu tien", "trang thai",
+  "kiem tra sheet", "xem chua dong"
+];
   const laLenhAdmin =
     adminLenh.includes(userMessage.toLowerCase()) ||
     userMessage.toLowerCase().startsWith("them:") ||
@@ -268,6 +402,36 @@ async function xuLyTinNhan(senderId, userMessage, user) {
         `NO  — để hủy đăng ký`
       );
     }
+    return;
+  }
+
+ // Lệnh xem danh sách chưa đóng từ Sheet (không nhắc)
+  if (userMessage.toLowerCase() === "xem chua dong") {
+    const list = await layDanhSachChuaDong();
+    if (list.length === 0) {
+      await guiTinNhan(senderId, "✅ Mọi người đã đóng tiền hết rồi!");
+    } else {
+      const ds = list
+        .map((x, i) => `${i + 1}. ${x.ten}  [${x.sheet}]`)
+        .join("\n");
+      await guiTinNhan(
+        senderId,
+        `📋 Chưa đóng tiền (${list.length} người):\n\n${ds}`
+      );
+    }
+    return;
+  }
+
+  // Lệnh check Sheet ngay và nhắc luôn (không chờ cron)
+  if (userMessage.toLowerCase() === "kiem tra sheet") {
+    await guiTinNhan(senderId, "🔍 Đang check Google Sheets...");
+    const { nhac, tongChuaDong } = await nhacNguoiChuaDong();
+    await guiTinNhan(
+      senderId,
+      tongChuaDong === 0
+        ? "✅ Mọi người đã đóng tiền hết rồi!"
+        : `✅ Đã nhắc ${nhac}/${tongChuaDong} người chưa đóng tiền!`
+    );
     return;
   }
   // ============================================
