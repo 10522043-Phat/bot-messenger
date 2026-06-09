@@ -353,12 +353,16 @@ const adminLenh = [
     if (index > -1) {
       ALLOWED_NAMES.splice(index, 1);
       await setSettings("allowedNames", ALLOWED_NAMES);
-      await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}"!`);
-    } else {
-      await guiTinNhan(senderId, `❌ Không tìm thấy "${tenXoa}"!`);
+      const xoaUser = await User.findOneAndDelete({
+       ten: { $regex: new RegExp(`^${tenXoa}$`, "i") }
+  });
+      if (xoaUser) {
+        await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}" khỏi danh sách và hệ thống!`);
+  } else {
+    await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}" khỏi danh sách!\n⚠️ Người này chưa đăng ký bot.`);
     }
-    return;
-  }
+  return;
+}
 
   // Lệnh xem tên
   if (userMessage.toLowerCase() === "xem ten") {
