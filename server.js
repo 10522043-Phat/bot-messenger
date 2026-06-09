@@ -355,12 +355,15 @@ const adminLenh = [
       await setSettings("allowedNames", ALLOWED_NAMES);
       const xoaUser = await User.findOneAndDelete({
        ten: { $regex: new RegExp(`^${tenXoa}$`, "i") }
-  });
-      if (xoaUser) {
-        await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}" khỏi danh sách và hệ thống!`);
-  } else {
-    await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}" khỏi danh sách!\n⚠️ Người này chưa đăng ký bot.`);
+    });
+    if (xoaUser) {
+      await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}" khỏi danh sách và hệ thống!`);
+    } else {
+      await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}" khỏi danh sách!\n⚠️ Người này chưa đăng ký bot.`);
     }
+  } else {
+    await guiTinNhan(senderId, `❌ Không tìm thấy "${tenXoa}"!`);
+  }
   return;
 }
 
