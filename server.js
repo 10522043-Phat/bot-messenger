@@ -168,9 +168,14 @@ async function nhacNguoiChuaDong() {
     });
 
     if (user) {
-      await guiNutThanhToan(user.senderId,
-        `Hi ${user.ten}! 👋\n\nMình thấy bạn chưa đóng tiền tháng này nè 😅\nBạn thanh toán sớm giúp mình nhé!`
-    );
+  await guiTinNhan(
+    user.senderId,
+    `Hi ${user.ten}! 👋\n\n` +
+    `Mình thấy bạn chưa đóng tiền tháng này nè 😅\n` +
+    `Bạn thanh toán sớm giúp mình nhé!\n\n` +
+    `YES — để nhận mã QR thanh toán\n` +
+    `NO  — để hủy đăng ký`
+  );
       await User.updateOne({ senderId: user.senderId }, { choDoiThanhToan: true });
       soNguoiNhac++;
     } else {
@@ -225,8 +230,11 @@ cron.schedule("20 14 6 * *", async () => {
     await User.updateOne({ senderId: user.senderId }, { choDoiThanhToan: true });
 
     const ten = user.xacNhan ? user.ten : "bạn";
-    await guiNutThanhToan(user.senderId,
-      `Hi ${ten}!\n\nTới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?`
+    await guiTinNhan(user.senderId,
+     `Hi ${ten}!\n\n` +
+     `Tới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?\n\n` +
+     `YES — để tiếp tục\n` +
+     `NO  — để hủy đăng ký`
 );
   }
 }, { timezone: "Asia/Ho_Chi_Minh" });
@@ -305,11 +313,12 @@ app.post("/webhook", async (req, res) => {
 // ===== XỬ LÝ TIN NHẮN =====
 async function xuLyTinNhan(senderId, userMessage, user) {
 
-  const adminLenh = [
-    "xem danh sach", "xem ten", "bat thu tien",
-    "tat thu tien", "trang thai",
-    "kiem tra sheet", "xem chua dong"
-  ];
+  // ===== LỆNH ADMIN =====
+const adminLenh = [
+  "xem danh sach", "xem ten", "bat thu tien",
+  "tat thu tien", "trang thai",
+  "kiem tra sheet", "xem chua dong"
+];
   const laLenhAdmin =
     adminLenh.includes(userMessage.toLowerCase()) ||
     userMessage.toLowerCase().startsWith("them:") ||
@@ -322,6 +331,7 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     }
   }
 
+  // Lệnh thêm tên
   if (userMessage.toLowerCase().startsWith("them:")) {
     const tenMoi = userMessage.split(":")[1].trim();
     if (!ALLOWED_NAMES.includes(tenMoi)) {
@@ -334,6 +344,7 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     return;
   }
 
+  // Lệnh xóa tên
   if (userMessage.toLowerCase().startsWith("xoa:")) {
     const tenXoa = userMessage.split(":")[1].trim();
     const index  = ALLOWED_NAMES.findIndex(
@@ -343,32 +354,36 @@ async function xuLyTinNhan(senderId, userMessage, user) {
       ALLOWED_NAMES.splice(index, 1);
       await setSettings("allowedNames", ALLOWED_NAMES);
       const xoaUser = await User.findOneAndDelete({
-        ten: { $regex: new RegExp(`^${tenXoa}$`, "i") }
-      });
-      if (xoaUser) {
-        await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}" khỏi danh sách và hệ thống!`);
-      } else {
-        await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}" khỏi danh sách!\n⚠️ Người này chưa đăng ký bot.`);
-      }
+       ten: { $regex: new RegExp(`^${tenXoa}$`, "i") }
+    });
+    if (xoaUser) {
+      await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}" khỏi danh sách và hệ thống!`);
     } else {
-      await guiTinNhan(senderId, `❌ Không tìm thấy "${tenXoa}"!`);
+      await guiTinNhan(senderId, `✅ Đã xóa "${tenXoa}" khỏi danh sách!\n⚠️ Người này chưa đăng ký bot.`);
     }
-    return;
+  } else {
+    await guiTinNhan(senderId, `❌ Không tìm thấy "${tenXoa}"!`);
   }
+  return;
+}
 
+  // Lệnh xem tên
   if (userMessage.toLowerCase() === "xem ten") {
     const ds = ALLOWED_NAMES.map((t, i) => `${i+1}. ${t}`).join("\n");
     await guiTinNhan(senderId, `📋 Danh sách tên:\n\n${ds}`);
     return;
   }
 
+  // Lệnh xem danh sách đã xác nhận
   if (userMessage.toLowerCase() === "xem danh sach") {
     const users    = await User.find({ xacNhan: true });
     const danhSach = users.map((u, i) => `${i+1}. ${u.ten}`).join("\n");
     if (users.length === 0) {
       await guiTinNhan(senderId, "📋 Chưa có ai xác nhận.");
     } else {
-      await guiTinNhan(senderId, `📋 Đã xác nhận:\n\n${danhSach}\n\nTổng: ${users.length} người`);
+      await guiTinNhan(senderId,
+        `📋 Đã xác nhận:\n\n${danhSach}\n\nTổng: ${users.length} người`
+      );
     }
     return;
   }
@@ -377,56 +392,62 @@ async function xuLyTinNhan(senderId, userMessage, user) {
   if (user.choDoiThanhToan) {
     const msg = userMessage.toLowerCase();
 
-    if (msg === "đã đóng tiền ✅" || msg === "đã đóng tiền" || msg === "da dong tien") {
+      if (msg === "yes" || msg === "có" || msg === "co") {
+      // Gửi QR code
       await User.updateOne({ senderId }, { choDoiThanhToan: false });
-      await guiTinNhan(senderId, "Cảm ơn bạn! Mình sẽ kiểm tra lại nha ✅");
-
-    } else if (msg === "yes" || msg === "có" || msg === "co") {
-      await User.updateOne({ senderId }, { choDoiThanhToan: false });
-      await guiTinNhan(senderId, `Vậy bạn thanh toán giúp mình nhé`);
+      await guiTinNhan(senderId,
+        `Vậy bạn thanh toán giúp mình nhé` 
+      );
       await guiAnhQRCode(senderId);
-      await guiTinNhan(senderId, `Có gì bạn gửi ảnh thanh toán lên nhóm giúp mình nhé`);
+      await guiTinNhan(senderId,
+        `Có gì bạn gửi ảnh thanh toán lên nhóm giúp mình nhé`
+      );
 
-    } else if (msg === "no" || msg === "không" || msg === "khong") {
+     } else if (msg === "no" || msg === "không" || msg === "khong") {
+      // Xóa khỏi danh sách
       await User.findOneAndDelete({ senderId });
+
       const index = ALLOWED_NAMES.findIndex(
-        t => t.toLowerCase() === user.ten.toLowerCase()
-      );
-      if (index > -1) ALLOWED_NAMES.splice(index, 1);
+       t => t.toLowerCase() === user.ten.toLowerCase()
+  );
+       if (index > -1) ALLOWED_NAMES.splice(index, 1);
       await setSettings("allowedNames", ALLOWED_NAMES);
+
       await guiTinNhan(senderId, `Vậy bạn out tài khoản giúp mình nhe`);
+}
 
-    } else {
-      await guiNutThanhToan(senderId,
-        `Bạn chọn một trong các nút bên dưới nhé:`
-      );
-    }
-    return;
-  }
-  // =============================================
-
+ // Lệnh xem danh sách chưa đóng từ Sheet (không nhắc)
   if (userMessage.toLowerCase() === "xem chua dong") {
     const list = await layDanhSachChuaDong();
     if (list.length === 0) {
       await guiTinNhan(senderId, "✅ Mọi người đã đóng tiền hết rồi!");
     } else {
-      const ds = list.map((x, i) => `${i + 1}. ${x.ten}  [${x.sheet}]`).join("\n");
-      await guiTinNhan(senderId, `📋 Chưa đóng tiền (${list.length} người):\n\n${ds}`);
+      const ds = list
+        .map((x, i) => `${i + 1}. ${x.ten}  [${x.sheet}]`)
+        .join("\n");
+      await guiTinNhan(
+        senderId,
+        `📋 Chưa đóng tiền (${list.length} người):\n\n${ds}`
+      );
     }
     return;
   }
 
+  // Lệnh check Sheet ngay và nhắc luôn (không chờ cron)
   if (userMessage.toLowerCase() === "kiem tra sheet") {
     await guiTinNhan(senderId, "🔍 Đang check Google Sheets...");
     const { nhac, tongChuaDong } = await nhacNguoiChuaDong();
-    await guiTinNhan(senderId,
+    await guiTinNhan(
+      senderId,
       tongChuaDong === 0
         ? "✅ Mọi người đã đóng tiền hết rồi!"
         : `✅ Đã nhắc ${nhac}/${tongChuaDong} người chưa đóng tiền!`
     );
     return;
   }
+  // ============================================
 
+  // Lệnh bật/tắt kỳ thu tiền thủ công
   if (userMessage.toLowerCase() === "bat thu tien") {
     await setSettings("dangThuTien", true);
     await guiTinNhan(senderId, "✅ Đã bật kỳ thu tiền!");
@@ -445,6 +466,7 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     return;
   }
 
+  // Chưa xác nhận → kiểm tra tên
   if (!user.xacNhan) {
     const tenKhop = ALLOWED_NAMES.find(
       t => t.toLowerCase() === userMessage.toLowerCase()
@@ -452,22 +474,28 @@ async function xuLyTinNhan(senderId, userMessage, user) {
     if (tenKhop) {
       await User.updateOne({ senderId }, { ten: tenKhop, xacNhan: true });
       await guiTinNhan(senderId, `Xác nhận thành công! Xin chào ${tenKhop}!`);
+
       const dangThuTien = await getSettings("dangThuTien");
       if (dangThuTien) {
         await User.updateOne({ senderId }, { choDoiThanhToan: true });
-        await guiNutThanhToan(senderId, `Tháng này đang thu tiền rồi bạn có muốn tiếp tục không?`);
+        await guiTinNhan(senderId,
+          `Tháng này đang thu tiền rồi bạn có muốn tiếp tục không?\n\n` +
+          `YES — để tiếp tục\n` +
+          `NO  — để hủy đăng ký`
+      );
       } else {
         await guiTinNhan(senderId, "Có vấn đề phát sinh thì bạn nhắn cho mình nha.");
       }
-    } else {
+
+      } else {
       await guiTinNhan(senderId,
         `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
         "Bạn tìm tên mình trong danh sách này nhé:"
       );
-      await guiAnhDanhSachTen(senderId);
-    }
-  }
-}
+    await guiAnhDanhSachTen(senderId);
+     }
+   }
+ }
 
 // ===== GỬI TIN NHẮN =====
 async function guiTinNhan(recipientId, text) {
@@ -481,15 +509,6 @@ async function guiTinNhan(recipientId, text) {
   } catch (err) {
     console.error("Lỗi gửi tin:", err.response?.data || err.message);
   }
-}
-
-async function guiNutThanhToan(recipientId, text) {
-  await guiTinNhan(recipientId, 
-    text + "\n\n" +
-    "Đã đóng tiền — gõ 'đã đóng tiền'\n" +
-    "Muốn thanh toán — gõ 'yes'\n" +
-    "Hủy đăng ký — gõ 'no'"
-  );
 }
 
 async function guiAnhQRCode(recipientId) {
