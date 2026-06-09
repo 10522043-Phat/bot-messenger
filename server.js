@@ -484,25 +484,12 @@ async function guiTinNhan(recipientId, text) {
 }
 
 async function guiNutThanhToan(recipientId, text) {
-  try {
-    await axios.post(
-      "https://graph.facebook.com/v19.0/me/messages",
-      {
-        recipient: { id: recipientId },
-        message: {
-          text: text,
-          quick_replies: [
-            { content_type: "text", title: "Đã đóng tiền ✅", payload: "DA_DONG_TIEN" },
-            { content_type: "text", title: "YES", payload: "YES" },
-            { content_type: "text", title: "NO", payload: "NO" }
-          ]
-        }
-      },
-      { params: { access_token: PAGE_ACCESS_TOKEN } }
-    );
-  } catch (err) {
-    console.error("Lỗi gửi nút:", err.response?.data || err.message);
-  }
+  await guiTinNhan(recipientId, 
+    text + "\n\n" +
+    "Đã đóng tiền — gõ 'đã đóng tiền'\n" +
+    "Muốn thanh toán — gõ 'yes'\n" +
+    "Hủy đăng ký — gõ 'no'"
+  );
 }
 
 async function guiAnhQRCode(recipientId) {
