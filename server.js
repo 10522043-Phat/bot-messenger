@@ -83,7 +83,7 @@ async function docMotSheet(sheets, spreadsheetId, sheetName) {
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${sheetName}!G:J`,  // G = Tên | J = Đóng tiền (index 3)
+      range: `'${sheetName}'!G:J`,  // G = Tên | J = Đóng tiền (index 3)
     });
     return res.data.values || [];
   } catch (err) {
@@ -258,6 +258,12 @@ cron.schedule("0 9 */2 * *", async () => {
       return;
     }
   }
+  const dangThu = await getSettings("dangThuTien");
+  if (!dangThu) {
+    console.log("⏸ Kỳ thu tiền đã đóng, bỏ qua.");
+    return;
+  }
+
   await nhacNguoiChuaDong();
 }, { timezone: "Asia/Ho_Chi_Minh" });
 
