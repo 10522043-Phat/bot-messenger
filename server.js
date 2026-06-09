@@ -336,13 +336,14 @@ const adminLenh = [
     const tenMoi = userMessage.split(":")[1].trim();
     if (!ALLOWED_NAMES.includes(tenMoi)) {
       ALLOWED_NAMES.push(tenMoi);
-      await setSettings("allowedNames", ALLOWED_NAMES);
-      await guiTinNhan(senderId, `✅ Đã thêm "${tenMoi}"!\nHiện có ${ALLOWED_NAMES.length} tên.`);
-    } else {
-      await guiTinNhan(senderId, `⚠️ Tên "${tenMoi}" đã có rồi!`);
-    }
-    return;
+      ALLOWED_NAMES.sort((a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' }));
+    await setSettings("allowedNames", ALLOWED_NAMES);
+    await guiTinNhan(senderId, `✅ Đã thêm "${tenMoi}"!\nHiện có ${ALLOWED_NAMES.length} tên.`);
+  } else {
+    await guiTinNhan(senderId, `⚠️ Tên "${tenMoi}" đã có rồi!`);
   }
+  return;
+}
 
   // Lệnh xóa tên
   if (userMessage.toLowerCase().startsWith("xoa:")) {
@@ -352,6 +353,7 @@ const adminLenh = [
     );
     if (index > -1) {
       ALLOWED_NAMES.splice(index, 1);
+      ALLOWED_NAMES.sort((a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' }));
       await setSettings("allowedNames", ALLOWED_NAMES);
       const xoaUser = await User.findOneAndDelete({
        ten: { $regex: new RegExp(`^${tenXoa}$`, "i") }
@@ -555,7 +557,10 @@ async function guiAnhQRCode(recipientId) {
 async function guiAnhDanhSachTen(recipientId) {
   const savedNames = await getSettings("allowedNames");
   const danhSach = savedNames || ALLOWED_NAMES;
-  const ds = danhSach.map((t, i) => `${i + 1}. ${t}`).join("\n");
+  const ds = [...danhSach]
+    .sort((a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' }))
+    .map((t, i) => `${i + 1}. ${t}`)
+    .join("\n");
   await guiTinNhan(recipientId, `Danh sách thành viên:\n\n${ds}`);
 }
 
