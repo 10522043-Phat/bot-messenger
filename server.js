@@ -406,15 +406,24 @@ const adminLenh = [
      } else if (msg === "no" || msg === "không" || msg === "khong") {
       // Xóa khỏi danh sách
       await User.findOneAndDelete({ senderId });
-
       const index = ALLOWED_NAMES.findIndex(
        t => t.toLowerCase() === user.ten.toLowerCase()
   );
        if (index > -1) ALLOWED_NAMES.splice(index, 1);
       await setSettings("allowedNames", ALLOWED_NAMES);
+      await guiTinNhan(senderId,
+        `Vậy bạn out tài khoản giúp mình nhe`
+      );
 
-      await guiTinNhan(senderId, `Vậy bạn out tài khoản giúp mình nhe`);
-}
+    } else {
+      // Không phải yes/no
+      await guiTinNhan(senderId,
+        `YES — để tiếp tục và nhận QR thanh toán\n` +
+        `NO  — để hủy đăng ký`
+      );
+    }
+    return;
+  }
 
  // Lệnh xem danh sách chưa đóng từ Sheet (không nhắc)
   if (userMessage.toLowerCase() === "xem chua dong") {
