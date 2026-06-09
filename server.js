@@ -564,6 +564,15 @@ async function guiAnhDanhSachTen(recipientId) {
   await guiTinNhan(recipientId, `Danh sách thành viên:\n\n${ds}`);
 }
 
+async function debugSheetNames(spreadsheetId) {
+  const sheets = await taoSheetsClient();
+  const res = await sheets.spreadsheets.get({ spreadsheetId });
+  const tabs = res.data.sheets.map(s => s.properties.title);
+  console.log(">>> Các tab trong file:", JSON.stringify(tabs));
+}
+
+debugSheetNames(process.env.SPREADSHEET_ID_2);
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server chạy tại port ${PORT}`);
