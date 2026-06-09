@@ -486,6 +486,14 @@ const adminLenh = [
 
       const dangThuTien = await getSettings("dangThuTien");
       if (dangThuTien) {
+        const chuaDong = await layDanhSachChuaDong();
+        const daДong = !chuaDong.some(
+          x => x.ten.toLowerCase() === tenKhop.toLowerCase()
+        );
+
+      if (daДong) {
+        await guiTinNhan(senderId, "Tháng này bạn đã đóng tiền rồi nha! ✅");
+      } else {
         await User.updateOne({ senderId }, { choDoiThanhToan: true });
         await guiTinNhan(senderId,
           `Tháng này đang thu tiền rồi bạn có muốn tiếp tục không?\n\n` +
@@ -495,7 +503,7 @@ const adminLenh = [
       } else {
         await guiTinNhan(senderId, "Có vấn đề phát sinh thì bạn nhắn cho mình nha.");
       }
-
+   }
       } else {
       await guiTinNhan(senderId,
         `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
