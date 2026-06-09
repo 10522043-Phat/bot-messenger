@@ -79,11 +79,12 @@ async function taoSheetsClient() {
 }
 
 // Đọc 1 file sheet cụ thể theo spreadsheetId + tên tab
+console.log(`>>> Đang đọc: [${sheetName}] độ dài: ${sheetName.length}`);
 async function docMotSheet(sheets, spreadsheetId, sheetName) {
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${sheetName}!G:J`,  // G = Tên | J = Đóng tiền (index 3)
+      range: `'${sheetName}'!G:J`,  // G = Tên | J = Đóng tiền (index 3)
     });
     return res.data.values || [];
   } catch (err) {
