@@ -81,12 +81,9 @@ async function taoSheetsClient() {
 // Đọc 1 file sheet cụ thể theo spreadsheetId + tên tab
 async function docMotSheet(sheets, spreadsheetId, sheetName) {
   try {
-    console.log(`>>> spreadsheetId: [${spreadsheetId}]`);
-    console.log(`>>> sheetName: [${sheetName}]`);
-    console.log(`>>> range: ['${sheetName}'!G:J]`);
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${sheetName}'!G:J`,
+      range: sheetName + "!G:J",
     });
     return res.data.values || [];
   } catch (err) {
