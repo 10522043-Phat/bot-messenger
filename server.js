@@ -499,12 +499,12 @@ const adminLenh = [
           `Tháng này đang thu tiền rồi bạn có muốn tiếp tục không?\n\n` +
           `YES — để tiếp tục\n` +
           `NO  — để hủy đăng ký`
-      );
+          );
+        }
       } else {
         await guiTinNhan(senderId, "Có vấn đề phát sinh thì bạn nhắn cho mình nha.");
       }
-   }
-      } else {
+    } else {
       await guiTinNhan(senderId,
         `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
         "Bạn tìm tên mình trong danh sách này nhé:"
