@@ -131,15 +131,7 @@ async function layDanhSachChuaDong() {
   const ds2 = locChuaDong(rows2, "File 2");
 
   // Gộp, loại trùng tên (case-insensitive)
-  const tatCa = [...ds1];
-  for (const item of ds2) {
-    const trung = tatCa.some(
-      x => x.ten.toLowerCase() === item.ten.toLowerCase()
-    );
-    if (!trung) tatCa.push(item);
-  }
-
-  return tatCa; // [{ ten: "Quyên", sheet: "File 1" }, ...]
+  return [...ds1, ...ds2];
 }
 
 // Gửi nhắc tới từng người chưa đóng
@@ -563,15 +555,6 @@ async function guiAnhDanhSachTen(recipientId) {
     .join("\n");
   await guiTinNhan(recipientId, `Danh sách thành viên:\n\n${ds}`);
 }
-
-async function debugSheetNames(spreadsheetId) {
-  const sheets = await taoSheetsClient();
-  const res = await sheets.spreadsheets.get({ spreadsheetId });
-  const tabs = res.data.sheets.map(s => s.properties.title);
-  console.log(">>> Các tab trong file:", JSON.stringify(tabs));
-}
-
-debugSheetNames(process.env.SPREADSHEET_ID_2);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
