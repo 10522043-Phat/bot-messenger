@@ -168,14 +168,9 @@ async function nhacNguoiChuaDong() {
     });
 
     if (user) {
-      await guiTinNhan(
-        user.senderId,
-        `Hi ${user.ten}!\n\n` +
-        `Mình thấy bạn chưa đóng tiền tháng này nè 😅\n` +
-        `Bạn thanh toán sớm giúp mình nhé!\n\n` +
-        `YES — để nhận mã QR thanh toán\n` +
-        `NO  — để hủy đăng ký`
-      );
+      await guiNutThanhToan(user.senderId,
+        `Hi ${user.ten}! 👋\n\nMình thấy bạn chưa đóng tiền tháng này nè 😅\nBạn thanh toán sớm giúp mình nhé!`
+    );
       await User.updateOne({ senderId: user.senderId }, { choDoiThanhToan: true });
       soNguoiNhac++;
     } else {
@@ -230,12 +225,9 @@ cron.schedule("20 14 6 * *", async () => {
     await User.updateOne({ senderId: user.senderId }, { choDoiThanhToan: true });
 
     const ten = user.xacNhan ? user.ten : "bạn";
-    await guiTinNhan(user.senderId,
-      `Hi ${ten}!\n\n` +
-      `Tới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?\n\n` +
-        `YES — để tiếp tục\n` +
-        `NO  — để hủy đăng ký`
-    );
+    await guiNutThanhToan(user.senderId,
+      `Hi ${ten}!\n\nTới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?`
+);
   }
 }, { timezone: "Asia/Ho_Chi_Minh" });
 
@@ -391,8 +383,11 @@ const adminLenh = [
   // ===== XỬ LÝ YES/NO KHI NHẮC ĐÓNG TIỀN =====
   if (user.choDoiThanhToan) {
     const msg = userMessage.toLowerCase();
+    if (msg === "đã đóng tiền ✅" || msg === "đã đóng tiền" || msg === "da dong tien") {
+    await User.updateOne({ senderId }, { choDoiThanhToan: false });
+    await guiTinNhan(senderId, "Cảm ơn bạn! Mình sẽ kiểm tra lại nha");
 
-    if (msg === "yes" || msg === "có" || msg === "co") {
+  } else if (msg === "yes" || msg === "có" || msg === "co") {
       // Gửi QR code
       await User.updateOne({ senderId }, { choDoiThanhToan: false });
       await guiTinNhan(senderId,
@@ -405,28 +400,16 @@ const adminLenh = [
 
     } else if (msg === "no" || msg === "không" || msg === "khong") {
       // Xóa khỏi danh sách
-      await User.updateOne(
-        { senderId },
-        { xacNhan: false, choDoiThanhToan: false }
-      );
-      const index = ALLOWED_NAMES.findIndex(
-        t => t.toLowerCase() === user.ten.toLowerCase()
-      );
-      if (index > -1) ALLOWED_NAMES.splice(index, 1);
-      await setSettings("allowedNames", ALLOWED_NAMES);
-      await guiTinNhan(senderId,
-        `Vậy bạn out tài khoản giúp mình nhe`
-      );
+      await User.findOneAndDelete({ senderId });
 
-    } else {
-      // Không phải yes/no
-      await guiTinNhan(senderId,
-        `YES — để tiếp tục và nhận QR thanh toán\n` +
-        `NO  — để hủy đăng ký`
-      );
-    }
-    return;
-  }
+      const index = ALLOWED_NAMES.findIndex(
+       t => t.toLowerCase() === user.ten.toLowerCase()
+  );
+       if (index > -1) ALLOWED_NAMES.splice(index, 1);
+      await setSettings("allowedNames", ALLOWED_NAMES);
+
+      await guiTinNhan(senderId, `Vậy bạn out tài khoản giúp mình nhe`);
+}
 
  // Lệnh xem danh sách chưa đóng từ Sheet (không nhắc)
   if (userMessage.toLowerCase() === "xem chua dong") {
@@ -490,11 +473,9 @@ const adminLenh = [
       const dangThuTien = await getSettings("dangThuTien");
       if (dangThuTien) {
         await User.updateOne({ senderId }, { choDoiThanhToan: true });
-        await guiTinNhan(senderId,
-          `Tháng này đang thu tiền rồi bạn có muốn tiếp tục không?\n\n` +
-          `YES — để tiếp tục\n` +
-          `NO  — để hủy đăng ký`
-        );
+        await guiNutThanhToan(senderId,
+          `Tháng này đang thu tiền rồi bạn có muốn tiếp tục không?`
+      );
       } else {
         await guiTinNhan(senderId, "Có vấn đề phát sinh thì bạn nhắn cho mình nha.");
       }
@@ -523,7 +504,28 @@ async function guiTinNhan(recipientId, text) {
   }
 }
 
-// Thêm hàm này bên dưới hàm guiTinNhan
+async function guiNutThanhToan(recipientId, text) {
+  try {
+    await axios.post(
+      "https://graph.facebook.com/v19.0/me/messages",
+      {
+        recipient: { id: recipientId },
+        message: {
+          text: text,
+          quick_replies: [
+            { content_type: "text", title: "Đã đóng tiền ✅", payload: "DA_DONG_TIEN" },
+            { content_type: "text", title: "YES", payload: "YES" },
+            { content_type: "text", title: "NO", payload: "NO" }
+          ]
+        }
+      },
+      { params: { access_token: PAGE_ACCESS_TOKEN } }
+    );
+  } catch (err) {
+    console.error("Lỗi gửi nút:", err.response?.data || err.message);
+  }
+}
+
 async function guiAnhQRCode(recipientId) {
   try {
     await axios.post(
