@@ -229,8 +229,6 @@ function timTenTrongDanhSach(input, danhSach) {
   // Chỉ gõ tên
   return sorted.find(t => t.toLowerCase() === text.toLowerCase()) || null;
 }
-}
-
 
 // ===== VERIFY CHỮ KÝ WEBHOOK =====
 function kiemTraChuKy(req) {
@@ -347,11 +345,17 @@ app.post("/webhook", (req, res) => {
         if (!senderId) continue;
 
         try {
-         if (event.postback?.payload === "GET_STARTED") {
- 	    const laMoi = await luuUserMoi(senderId);
-	    if (laMoi) await xuLyGetStarted(senderId);
- 	    else await guiTinNhan(senderId, "Bạn đã đăng ký rồi nha! Có gì cần cứ nhắn mình 😊");
-	  } else if (event.message?.text) {
+	if (event.postback?.payload === "GET_STARTED") {
+  	const laMoi = await luuUserMoi(senderId);
+  	if (laMoi) {
+ 	   await xuLyGetStarted(senderId);
+ 	 } else {
+ 	   const u = await User.findOne({ senderId });
+  	  if (u && !u.xacNhan) await xuLyGetStarted(senderId);  // chưa xác nhận → hướng dẫn lại
+  	  else await guiTinNhan(senderId, "Bạn đã đăng ký rồi nha! Có gì cần cứ nhắn mình 😊");
+ 	 }
+	}
+	    else if (event.message?.text) {
             const msg = event.message.text.trim();
             console.log(`Tin nhắn từ ${senderId}: ${msg}`);
             let user = await User.findOne({ senderId });
@@ -546,7 +550,8 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
       ALLOWED_NAMES.sort((a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' }));
       await setSettings("allowedNames", ALLOWED_NAMES);
       await guiTinNhan(senderId,
-        `Vậy bạn out tài khoản giúp mình nhe`
+        `Vậy bạn out tài khoản giúp mình nhe.\n` +
+        `Nếu có góp ý gì về dịch vụ, bạn nhắn cho admin Trần Agness nha, cảm ơn bạn nhiều!`
       );
       for (const adminId of ADMIN_IDS) {
         await guiTinNhan(adminId, `🔔 "${user.ten}" đã hủy đăng ký. Nhớ xóa khỏi Google Sheet!`);
@@ -660,6 +665,7 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
       );
     }
   }
+}
 
 // ===== GỬI TIN NHẮN =====
 async function guiTinNhan(recipientId, text, dungTag = false) {
@@ -697,7 +703,7 @@ async function hoiGemini(cauHoi, tenUser, ngonNgu = "vi", lichSu = []) {
     const res = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
      {
-       contents: [{ parts: [{ text: userMessage }] }],
+        contents,
        systemInstruction: {
          parts: [{
            text:
@@ -721,13 +727,9 @@ async function hoiGemini(cauHoi, tenUser, ngonNgu = "vi", lichSu = []) {
              "- Dùng Projects để lưu context dài hạn cho công việc.\n" +
              "- Viết prompt rõ ràng: nêu rõ vai trò, yêu cầu, định dạng mong muốn.\n" +
              "- Có thể upload file dưới dạng markdown, ảnh để Claude phân tích.\n" +
-             "- Hiện có sẵn các skill /humanizer -> giúp 0% AI detect, và /cavemen -> giúp tiết kiệm token".\n\n" +
-             "-Cách kiểm tra token bằng cách vào setting, vào usage bạn sẽ thấy lượng token còn lại" +
+             "- Hiện có sẵn các skill /humanizer -> giúp 0% AI detect, và /cavemen -> giúp tiết kiệm token.\n\n" +
+             "-Cách kiểm tra token bằng cách vào setting, vào usage bạn sẽ thấy lượng token còn lại.\n" +
              "- Nếu cần hướng dẫn chi tiết hơn, bảo người dùng nhắn admin.\n\n" +
- 
-             "=== XIN FEEDBACK ===\n" +
-             "Nếu người dùng chọn no để không sài tiếp tài khoản hãy hỏi bạn có muốn góp ý hoặc phản hồi về dịch vụ, hãy cảm ơn họ và " +
-             "nhờ họ nhắn trực tiếp cho admin để được ghi nhận.\n\n" +
  
              "=== CHAT TỰ DO / TÁN GẪU ===\n" +
              "Bạn được phép trả lời vui vẻ các câu hỏi ngẫu nhiên, tán gẫu, hỏi thăm, " +
@@ -739,7 +741,7 @@ async function hoiGemini(cauHoi, tenUser, ngonNgu = "vi", lichSu = []) {
              "- Không quá 3-4 câu mỗi lần, trừ khi hướng dẫn kỹ thuật cần nhiều bước.\n" +
              "- Câu hỏi về chính sách nhóm mà không rõ: nhờ liên hệ admin.\n" +
              "- Không bịa thông tin về giá, tài khoản, hay chính sách nhóm.\n" +
-             language
+             yeuCauNgonNgu
          }]
        }
      }
@@ -747,10 +749,8 @@ async function hoiGemini(cauHoi, tenUser, ngonNgu = "vi", lichSu = []) {
     return res.data.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (err) {
     console.error("Lỗi Gemini:", err.response?.data?.error?.message || err.message);
-   return ngonNgu === "en"
-     ? "Sorry, I'm busy right now. Please try again later 😊"
-     : "Xin lỗi mình đang bận, bạn nhắn lại sau nhé 😊";
- }
+    return null;
+  }
 }
 
 
