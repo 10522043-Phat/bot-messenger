@@ -1,5 +1,5 @@
 require("dotenv").config();
-for (const k of ["PAGE_ACCESS_TOKEN", "MONGODB_URI", "APP_SECRET"]) {
+for (const k of ["PAGE_ACCESS_TOKEN", "MONGODB_URI", "APP_SECRET", "GEMINI_API_KEY"]) {
   if (!process.env[k]) {
     console.error(`❌ Thiếu ${k} trong .env! Dừng.`);
     process.exit(1);
@@ -61,6 +61,8 @@ const userSchema = new mongoose.Schema({
   ten:             { type: String, default: "Chưa xác nhận" },
   xacNhan:         { type: Boolean, default: false },
   choDoiThanhToan:    { type: Boolean, default: false },
+  ngonNgu:         { type: String, default: null },
+  lichSuChat:      { type: [{ role: String, text: String }], default: [] },
   thoiGianThamGia: { type: Date, default: Date.now }
 });
 const User = mongoose.model("User", userSchema);
@@ -198,6 +200,37 @@ async function nhacNguoiChuaDong() {
 function laAdmin(senderId) {
   return ADMIN_IDS.includes(senderId);
 }
+
+// ===== TÌM TÊN THEO SỐ / TÊN / CẢ HAI =====
+function timTenTrongDanhSach(input, danhSach) {
+  // Sắp xếp y hệt danh sách bot gửi cho user → số thứ tự khớp nhau
+  const sorted = [...danhSach].sort(
+    (a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' })
+  );
+  const text = input.trim();
+
+  // Dạng có số đầu: "20", "20.", "20. Phát", "20 Phát"
+  const match = text.match(/^(\d+)[.\s]*(.*)$/);
+  if (match) {
+    const so      = parseInt(match[1], 10);
+    const phanTen = match[2].trim();
+    const tenTheoSo = (so >= 1 && so <= sorted.length) ? sorted[so - 1] : null;
+
+    if (phanTen) {
+      // Gõ cả số lẫn tên → ưu tiên tên nếu tên có trong danh sách
+      const tenKhop = sorted.find(t => t.toLowerCase() === phanTen.toLowerCase());
+      if (tenKhop) return tenKhop;
+      // Tên gõ sai chính tả nhưng số hợp lệ → tin số
+      return tenTheoSo;
+    }
+    return tenTheoSo;
+  }
+
+  // Chỉ gõ tên
+  return sorted.find(t => t.toLowerCase() === text.toLowerCase()) || null;
+}
+}
+
 
 // ===== VERIFY CHỮ KÝ WEBHOOK =====
 function kiemTraChuKy(req) {
@@ -531,10 +564,16 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
 
   // Chưa xác nhận → kiểm tra tên
   if (!user.xacNhan) {
-    const tenKhop = ALLOWED_NAMES.find(
-      t => t.toLowerCase() === userMessage.toLowerCase()
-    );
+    const tenKhop = timTenTrongDanhSach(userMessage, ALLOWED_NAMES);
     if (tenKhop) {
+      const daCoNguoi = await User.findOne({ ten: tenKhop, xacNhan: true });
+      if (daCoNguoi) {
+        await guiTinNhan(senderId,
+          `Tên "${tenKhop}" đã có người xác nhận rồi!\n` +
+          `Nếu đây đúng là bạn, liên hệ Trần Agness để xử lý nhé.`
+        );
+        return;
+      }
       await User.updateOne({ senderId }, { ten: tenKhop, xacNhan: true });
       await guiTinNhan(senderId, `Xác nhận thành công! Xin chào ${tenKhop}!`);
 
@@ -565,10 +604,62 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
       );
     await guiAnhDanhSachTen(senderId);
      }
-   } else if (user.xacNhan && !user.choDoiThanhToan) {
-    await guiTinNhan(senderId, "Có gì cần mình hỗ trợ không bạn? 😊");
+} else if (user.xacNhan && !user.choDoiThanhToan) {
+    const msg = userMessage.toLowerCase();
+
+    // Cho phép đổi ngôn ngữ bất kỳ lúc nào bằng cách gõ "vi" hoặc "en"
+    if (msg === "vi" || msg === "tiếng việt" || msg === "tieng viet") {
+      await User.updateOne({ senderId }, { ngonNgu: "vi" });
+      await guiTinNhan(senderId, "OK mình sẽ hỗ trợ bằng tiếng Việt nha! 🇻🇳\nBạn cần giúp gì?");
+      return;
+    }
+    if (msg === "en" || msg === "english") {
+      await User.updateOne({ senderId }, { ngonNgu: "en" });
+      await guiTinNhan(senderId, "Got it, I'll assist you in English! 🇬🇧\nHow can I help?");
+      return;
+    }
+
+    // Chưa chọn ngôn ngữ → hỏi trước
+    if (!user.ngonNgu) {
+      await guiTinNhan(senderId,
+        `Bạn muốn mình hỗ trợ bằng ngôn ngữ nào? / Which language would you like?\n\n` +
+        `VI — Tiếng Việt\n` +
+        `EN — English`
+      );
+      return;
+    }
+
+    if (msg === "reset" || msg === "quên đi" || msg === "quen di") {
+      await User.updateOne({ senderId }, { lichSuChat: [] });
+      await guiTinNhan(senderId,
+        user.ngonNgu === "en" ? "Memory cleared! Fresh start 🧹" : "Đã xóa trí nhớ! Bắt đầu lại nha 🧹"
+      );
+      return;
+    }
+
+    // Đã có ngôn ngữ → Gemini trả lời
+    const traLoi = await hoiGemini(userMessage, user.ten, user.ngonNgu, user.lichSuChat || []);
+    const fallback = user.ngonNgu === "en"
+      ? "How can I help you? 😊"
+      : "Có gì cần mình hỗ trợ không bạn? 😊";
+    await guiTinNhan(senderId, traLoi || fallback);
+    if (traLoi) {
+      await User.updateOne(
+        { senderId },
+        {
+          $push: {
+            lichSuChat: {
+              $each: [
+                { role: "user",  text: userMessage },
+                { role: "model", text: traLoi }
+              ],
+              $slice: -20
+            }
+          }
+        }
+      );
+    }
   }
- }
 
 // ===== GỬI TIN NHẮN =====
 async function guiTinNhan(recipientId, text, dungTag = false) {
@@ -588,6 +679,80 @@ async function guiTinNhan(recipientId, text, dungTag = false) {
     console.error("Lỗi gửi tin:", err.response?.data || err.message);
   }
 }
+
+async function hoiGemini(cauHoi, tenUser, ngonNgu = "vi", lichSu = []) {
+  const yeuCauNgonNgu = ngonNgu === "en"
+   ? "Always reply in English only, naturally and friendly. Keep it under 3 sentences."
+   : "Luôn trả lời bằng tiếng Việt, tự nhiên và thân thiện. Không quá 3 câu.";
+
+  const contents = [
+    ...lichSu.map(m => ({
+      role: m.role,
+      parts: [{ text: m.text }]
+    })),
+    { role: "user", parts: [{ text: cauHoi }] }
+  ];
+
+  try {
+    const res = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+     {
+       contents: [{ parts: [{ text: userMessage }] }],
+       systemInstruction: {
+         parts: [{
+           text:
+             "Bạn là trợ lý hỗ trợ của nhóm share tài khoản AI (Claude). " +
+             "Tên bạn là Agness Bot, phong cách thân thiện, vui vẻ, dùng emoji vừa phải.\n\n" +
+ 
+             "=== THÔNG TIN NHÓM ===\n" +
+             "- Nhóm cung cấp tài khoản Claude AI dùng chung, thu phí hàng tháng.\n" +
+             "- Đóng tiền vào ngày 6 hàng tháng.\n" +
+             "- Thanh toán qua QR code do admin gửi.\n\n" +
+ 
+             "=== LÝ DO CÓ NHIỀU TÀI KHOẢN ===\n" +
+             "Nếu được hỏi tại sao có nhiều tài khoản, giải thích: " +
+             "Do giới hạn của Claude, mỗi tài khoản có quota sử dụng nhất định trong ngày. " +
+             "Nhóm dùng nhiều tài khoản luân phiên để đảm bảo mọi người luôn có tài khoản dùng được, " +
+             "không bị gián đoạn khi một tài khoản hết quota.\n\n" +
+ 
+             "=== HƯỚNG DẪN DÙNG CLAUDE ===\n" +
+             "Nếu được hỏi về cách dùng Claude hoặc các skill, hướng dẫn:\n" +
+             "- Vào claude.ai, đăng nhập bằng tài khoản được cung cấp.\n" +
+             "- Dùng Projects để lưu context dài hạn cho công việc.\n" +
+             "- Viết prompt rõ ràng: nêu rõ vai trò, yêu cầu, định dạng mong muốn.\n" +
+             "- Có thể upload file dưới dạng markdown, ảnh để Claude phân tích.\n" +
+             "- Hiện có sẵn các skill /humanizer -> giúp 0% AI detect, và /cavemen -> giúp tiết kiệm token".\n\n" +
+             "-Cách kiểm tra token bằng cách vào setting, vào usage bạn sẽ thấy lượng token còn lại" +
+             "- Nếu cần hướng dẫn chi tiết hơn, bảo người dùng nhắn admin.\n\n" +
+ 
+             "=== XIN FEEDBACK ===\n" +
+             "Nếu người dùng chọn no để không sài tiếp tài khoản hãy hỏi bạn có muốn góp ý hoặc phản hồi về dịch vụ, hãy cảm ơn họ và " +
+             "nhờ họ nhắn trực tiếp cho admin để được ghi nhận.\n\n" +
+ 
+             "=== CHAT TỰ DO / TÁN GẪU ===\n" +
+             "Bạn được phép trả lời vui vẻ các câu hỏi ngẫu nhiên, tán gẫu, hỏi thăm, " +
+             "câu hỏi kiến thức thông thường, hay chủ đề không liên quan đến nhóm. " +
+             "Trả lời tự nhiên như một người bạn, hài hước nhẹ nhàng nếu phù hợp. " +
+             "Ví dụ: hỏi thời tiết, ăn gì, kể chuyện cười, hỏi về AI, tám chuyện... đều OK! 😄\n\n" +
+ 
+             "=== QUY TẮC TRẢ LỜI ===\n" +
+             "- Không quá 3-4 câu mỗi lần, trừ khi hướng dẫn kỹ thuật cần nhiều bước.\n" +
+             "- Câu hỏi về chính sách nhóm mà không rõ: nhờ liên hệ admin.\n" +
+             "- Không bịa thông tin về giá, tài khoản, hay chính sách nhóm.\n" +
+             language
+         }]
+       }
+     }
+   );
+    return res.data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch (err) {
+    console.error("Lỗi Gemini:", err.response?.data?.error?.message || err.message);
+   return ngonNgu === "en"
+     ? "Sorry, I'm busy right now. Please try again later 😊"
+     : "Xin lỗi mình đang bận, bạn nhắn lại sau nhé 😊";
+ }
+}
+
 
 async function guiAnhQRCode(recipientId) {
   try {
