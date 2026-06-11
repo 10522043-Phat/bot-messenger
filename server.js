@@ -211,32 +211,28 @@ function laAdmin(senderId) {
 }
 
 // ===== TÌM TÊN THEO SỐ / TÊN / CẢ HAI =====
-function timTenTrongDanhSach(input, danhSach) {
-  // Sắp xếp y hệt danh sách bot gửi cho user → số thứ tự khớp nhau
-  const sorted = [...danhSach].sort(
+function timTenTrongDanhSach(input, danhSachDayDu) {
+  // SORT theo danh sách ĐẦY ĐỦ — số thứ tự ổn định, không thay đổi
+  const sortedFull = [...danhSachDayDu].sort(
     (a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' })
   );
   const text = input.trim();
 
-  // Dạng có số đầu: "20", "20.", "20. Phát", "20 Phát"
   const match = text.match(/^(\d+)[.\s]*(.*)$/);
   if (match) {
-    const so      = parseInt(match[1], 10);
+    const so = parseInt(match[1], 10);
     const phanTen = match[2].trim();
-    const tenTheoSo = (so >= 1 && so <= sorted.length) ? sorted[so - 1] : null;
+    const tenTheoSo = (so >= 1 && so <= sortedFull.length) ? sortedFull[so - 1] : null;
 
     if (phanTen) {
-      // Gõ cả số lẫn tên → ưu tiên tên nếu tên có trong danh sách
-      const tenKhop = sorted.find(t => t.toLowerCase() === phanTen.toLowerCase());
+      const tenKhop = sortedFull.find(t => t.toLowerCase() === phanTen.toLowerCase());
       if (tenKhop) return tenKhop;
-      // Tên gõ sai chính tả nhưng số hợp lệ → tin số
       return tenTheoSo;
     }
     return tenTheoSo;
   }
 
-  // Chỉ gõ tên
-  return sorted.find(t => t.toLowerCase() === text.toLowerCase()) || null;
+  return sortedFull.find(t => t.toLowerCase() === text.toLowerCase()) || null;
 }
 
 // ===== VERIFY CHỮ KÝ WEBHOOK =====
@@ -303,7 +299,7 @@ cron.schedule("15 12 6 * *", async () => {
 
 // ===== CRON NHẮC MỖI 2 NGÀY DỰA TRÊN GOOGLE SHEETS =====
 // Chạy lúc 12h15 trưa vào các ngày chẳn (2, 4, 6,... 16),
-cron.schedule("15 12 2,4,8,10,12,14,16 * *", async () => {
+cron.schedule("15 12 8,10,12,14,16 * *", async () => {
   // Kiểm tra xem đã đủ 48 tiếng kể từ lần nhắc trước chưa
   const lastRun = await getSettings("lastSheetReminder");
   if (lastRun) {
@@ -364,6 +360,32 @@ app.post("/webhook", (req, res) => {
   	  else await guiTinNhan(senderId, "Bạn đã đăng ký rồi nha! Có gì cần cứ nhắn mình 😊");
  	 }
 	}
+else if (event.message && !event.message.text && event.message.attachments) {
+  // Bỏ qua sticker/like thumb để khỏi spam reply
+  const chiCoSticker = event.message.attachments.every(
+    a => a.type === "fallback" || event.message.sticker_id !== undefined
+  );
+  if (chiCoSticker) continue;
+
+  const u = await User.findOne({ senderId });
+
+  if (!u || !u.xacNhan) {
+    await guiTinNhan(senderId,
+      "Mình chỉ xử lý tin nhắn văn bản thôi nha!\n" +
+      "Bạn gõ tên mình để xác nhận giúp mình nhé"
+    );
+  } else if (u.choDoiThanhToan) {
+    await guiTinNhan(senderId,
+      "Cảm ơn bạn! Bạn gửi ảnh thanh toán lên nhóm giúp mình nhé, ở đây mình không xử lý được ảnh 🙏"
+    );
+  } else {
+    await guiTinNhan(senderId,
+      u.ngonNgu === "en"
+        ? "I can only handle text messages!! What would you like to ask?"
+        : "Mình chỉ xử lý tin nhắn văn bản thôi nha!! Bạn cần hỏi gì?"
+    );
+  }
+}
 	    else if (event.message?.text) {
             const msg = event.message.text.trim();
             console.log(`Tin nhắn từ ${senderId}: ${msg}`);
@@ -465,18 +487,24 @@ const adminLenh = [
 }
 
   // Lệnh xem danh sách đã xác nhận
-  if (userMessage.toLowerCase() === "xem danh sach") {
-    const users    = await User.find({ xacNhan: true });
-    const danhSach = users.map((u, i) => `${i+1}. ${u.ten}`).join("\n");
-    if (users.length === 0) {
-      await guiTinNhan(senderId, "📋 Chưa có ai xác nhận.");
-    } else {
-      await guiTinNhan(senderId,
-        `📋 Đã xác nhận:\n\n${danhSach}\n\nTổng: ${users.length} người`
-      );
-    }
-    return;
+if (userMessage.toLowerCase() === "xem danh sach") {
+  const users = await User.find({ xacNhan: true }).sort({ thoiGianThamGia: 1 });
+  const danhSach = users.map((u, i) => {
+    const ngay = u.thoiGianThamGia
+      ? new Date(u.thoiGianThamGia).toLocaleDateString("vi-VN")
+      : "?";
+    return `${i+1}. ${u.ten} (${ngay})`;
+  }).join("\n");
+  
+  if (users.length === 0) {
+    await guiTinNhan(senderId, "📋 Chưa có ai xác nhận.");
+  } else {
+    await guiTinNhan(senderId,
+      `📋 Đã xác nhận:\n\n${danhSach}\n\nTổng: ${users.length} người`
+    );
   }
+  return;
+}
 
  // Lệnh xem danh sách chưa đóng từ Sheet (không nhắc)
   if (userMessage.toLowerCase() === "xem chua dong") {
@@ -524,6 +552,7 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
 
   if (userMessage.toLowerCase() === "tat thu tien") {
     await setSettings("dangThuTien", false);
+    await User.updateMany({ choDoiThanhToan: true }, { choDoiThanhToan: false });
     await guiTinNhan(senderId, "✅ Đã tắt kỳ thu tiền!");
     return;
   }
@@ -577,9 +606,10 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
   }
 
   // Chưa xác nhận → kiểm tra tên
-  if (!user.xacNhan) {
-    const danhSachHienThi = await layDanhSachChuaXacNhan();
-    const tenKhop = timTenTrongDanhSach(userMessage, danhSachHienThi);
+if (!user.xacNhan) {
+  const savedNames = await getSettings("allowedNames");
+  const danhSachDayDu = savedNames || ALLOWED_NAMES;
+  const tenKhop = timTenTrongDanhSach(userMessage, danhSachDayDu);
 
     if (tenKhop) {
       const daCoNguoi = await User.findOne({ ten: tenKhop, xacNhan: true });
@@ -677,7 +707,7 @@ async function guiTinNhan(recipientId, text, dungTag = false) {
   const payload = { recipient: { id: recipientId }, message: { text } };
   if (dungTag) {
     payload.messaging_type = "MESSAGE_TAG";
-    payload.tag = "CONFIRMED_EVENT_UPDATE";
+    payload.tag = "ACCOUNT_UPDATE";
   }
   try {
     await axios.post(
@@ -789,20 +819,29 @@ async function guiAnhQRCode(recipientId) {
 }
 
 async function guiAnhDanhSachTen(recipientId) {
-  const chuaXacNhan = await layDanhSachChuaXacNhan();
+  const savedNames = await getSettings("allowedNames");
+  const danhSachDayDu = savedNames || ALLOWED_NAMES;
+  
+  const daXacNhan = await User.find({ xacNhan: true }).lean().select("ten");
+  const tenDaChon = new Set(daXacNhan.map(u => u.ten.toLowerCase()));
 
-  if (chuaXacNhan.length === 0) {
+  const sorted = [...danhSachDayDu].sort(
+    (a, b) => a.localeCompare(b, "vi", { sensitivity: "base" })
+  );
+  
+  // Đánh số theo VỊ TRÍ trong list đầy đủ, ẩn người đã xác nhận
+  const ds = sorted
+    .map((t, i) => ({ ten: t, so: i + 1 }))
+    .filter(x => !tenDaChon.has(x.ten.toLowerCase()))
+    .map(x => `${x.so}. ${x.ten}`)
+    .join("\n");
+
+  if (!ds) {
     await guiTinNhan(recipientId,
-      "Tất cả thành viên đã xác nhận rồi!\n" +
-      "Nếu không thấy tên mình, nhắn admin Trần Agness nhé."
+      "Tất cả thành viên đã xác nhận rồi!\nNếu không thấy tên mình, nhắn admin Trần Agness nhé."
     );
     return;
   }
-
-  const ds = [...chuaXacNhan]
-    .sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }))
-    .map((t, i) => `${i + 1}. ${t}`)
-    .join("\n");
 
   await guiTinNhan(recipientId, `Danh sách thành viên chưa đăng ký:\n\n${ds}`);
 }
