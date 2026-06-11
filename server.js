@@ -613,25 +613,20 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
 } else if (user.xacNhan && !user.choDoiThanhToan) {
     const msg = userMessage.toLowerCase();
 
-    // Cho phép đổi ngôn ngữ bất kỳ lúc nào bằng cách gõ "vi" hoặc "en"
-    if (msg === "vi" || msg === "tiếng việt" || msg === "tieng viet") {
+// Cho phép đổi ngôn ngữ bất kỳ lúc nào
+    const xinTiengViet = ["vi", "tiếng việt", "tieng viet", "vietnamese", "switch to vietnamese"]
+      .some(t => msg === t || (msg.includes("vietnamese") && (msg.includes("switch") || msg.includes("change") || msg.includes("speak"))) || msg.includes("chuyển qua tiếng việt") || msg.includes("nói tiếng việt"));
+    if (xinTiengViet) {
       await User.updateOne({ senderId }, { ngonNgu: "vi" });
       await guiTinNhan(senderId, "OK mình sẽ hỗ trợ bằng tiếng Việt nha! 🇻🇳\nBạn cần giúp gì?");
       return;
     }
-    if (msg === "en" || msg === "english") {
+
+    const xinTiengAnh = ["en", "english"]
+      .some(t => msg === t) || (msg.includes("english") && (msg.includes("switch") || msg.includes("change") || msg.includes("speak"))) || msg.includes("chuyển qua tiếng anh") || msg.includes("nói tiếng anh");
+    if (xinTiengAnh) {
       await User.updateOne({ senderId }, { ngonNgu: "en" });
       await guiTinNhan(senderId, "Got it, I'll assist you in English! 🇬🇧\nHow can I help?");
-      return;
-    }
-
-    // Chưa chọn ngôn ngữ → hỏi trước
-    if (!user.ngonNgu) {
-      await guiTinNhan(senderId,
-        `Bạn muốn mình hỗ trợ bằng ngôn ngữ nào? / Which language would you like?\n\n` +
-        `VI — Tiếng Việt\n` +
-        `EN — English`
-      );
       return;
     }
 
@@ -738,6 +733,11 @@ async function hoiGemini(cauHoi, tenUser, ngonNgu = "vi", lichSu = []) {
              "Trả lời tự nhiên như một người bạn, hài hước nhẹ nhàng nếu phù hợp. " +
              "Ví dụ: hỏi thời tiết, ăn gì, kể chuyện cười, hỏi về AI, tám chuyện... đều OK! 😄\n\n" +
  
+	     "=== ĐỔI NGÔN NGỮ ===\n" +
+             "Bạn KHÔNG thể tự đổi ngôn ngữ. Nếu người dùng yêu cầu đổi ngôn ngữ, " +
+             "hướng dẫn họ: gõ 'vi' để chuyển sang tiếng Việt, gõ 'en' để chuyển sang tiếng Anh. " +
+             "Hệ thống sẽ tự chuyển khi họ gõ đúng từ khóa.\n\n" +
+
              "=== QUY TẮC TRẢ LỜI ===\n" +
              "- Không quá 3-4 câu mỗi lần, trừ khi hướng dẫn kỹ thuật cần nhiều bước.\n" +
              "- Câu hỏi về chính sách nhóm mà không rõ: nhờ liên hệ admin.\n" +
