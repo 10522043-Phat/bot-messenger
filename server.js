@@ -591,7 +591,7 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
         );
 
       if (daDong) {
-        await guiTinNhan(senderId, "Tháng này bạn đã đóng tiền rồi nha! ✅");
+        await guiTinNhan(senderId, "Cám ơn bạn đã kích hoạt mình nhé!");
       } else {
         await User.updateOne({ senderId }, { choDoiThanhToan: true });
         await guiTinNhan(senderId,
