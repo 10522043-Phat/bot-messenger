@@ -147,6 +147,14 @@ async function layDanhSachChuaDong() {
   return [...ds1, ...ds2];
 }
 
+async function layDanhSachChuaXacNhan() {
+  const savedNames = await getSettings("allowedNames");
+  const danhSach   = savedNames || ALLOWED_NAMES;
+  const daXacNhan  = await User.find({ xacNhan: true }).lean().select("ten");
+  const tenDaChon  = new Set(daXacNhan.map(u => u.ten.toLowerCase()));
+  return [...danhSach].filter(t => !tenDaChon.has(t.toLowerCase()));
+}
+
 // Gửi nhắc tới từng người chưa đóng
 async function nhacNguoiChuaDong() {
   console.log("🔍 Check 2 Google Sheet để nhắc đóng tiền...");
@@ -570,12 +578,14 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
 
   // Chưa xác nhận → kiểm tra tên
   if (!user.xacNhan) {
-    const tenKhop = timTenTrongDanhSach(userMessage, ALLOWED_NAMES);
+    const danhSachHienThi = await layDanhSachChuaXacNhan();
+    const tenKhop = timTenTrongDanhSach(userMessage, danhSachHienThi);
+
     if (tenKhop) {
       const daCoNguoi = await User.findOne({ ten: tenKhop, xacNhan: true });
       if (daCoNguoi) {
         await guiTinNhan(senderId,
-          `Tên "${tenKhop}" đã có người xác nhận rồi!\n` +
+          `Tên "${tenKhop}" vừa được người khác xác nhận rồi!\n` +
           `Nếu đây đúng là bạn, liên hệ Trần Agness để xử lý nhé.`
         );
         return;
@@ -586,18 +596,17 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
       const dangThuTien = await getSettings("dangThuTien");
       if (dangThuTien) {
         const chuaDong = await layDanhSachChuaDong();
-        const daDong = !chuaDong.some(
+        const daDong   = !chuaDong.some(
           x => x.ten.toLowerCase() === tenKhop.toLowerCase()
         );
-
-      if (daDong) {
-        await guiTinNhan(senderId, "Cám ơn bạn đã kích hoạt mình nhé!");
-      } else {
-        await User.updateOne({ senderId }, { choDoiThanhToan: true });
-        await guiTinNhan(senderId,
-          `Tháng này đang thu tiền rồi bạn có muốn tiếp tục không?\n\n` +
-          `YES — để tiếp tục\n` +
-          `NO  — để hủy đăng ký`
+        if (daDong) {
+          await guiTinNhan(senderId, "Cám ơn bạn đã kích hoạt mình nhé!");
+        } else {
+          await User.updateOne({ senderId }, { choDoiThanhToan: true });
+          await guiTinNhan(senderId,
+            `Tháng này đang thu tiền rồi bạn có muốn tiếp tục không?\n\n` +
+            `YES — để tiếp tục\n` +
+            `NO  — để hủy đăng ký`
           );
         }
       } else {
@@ -605,12 +614,12 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
       }
     } else {
       await guiTinNhan(senderId,
-        `Tên "${userMessage}" của bạn không có trong danh sách.\n` +
-        "Bạn tìm tên mình trong danh sách này nhé:"
+        `Tên "${userMessage}" không có trong danh sách.\n` +
+        `Bạn tìm tên mình trong danh sách này nhé:`
       );
-    await guiAnhDanhSachTen(senderId);
-     }
-} else if (user.xacNhan && !user.choDoiThanhToan) {
+      await guiAnhDanhSachTen(senderId);
+    }
+  } else if (user.xacNhan && !user.choDoiThanhToan) {
     const msg = userMessage.toLowerCase();
 
 // Cho phép đổi ngôn ngữ bất kỳ lúc nào
@@ -780,13 +789,22 @@ async function guiAnhQRCode(recipientId) {
 }
 
 async function guiAnhDanhSachTen(recipientId) {
-  const savedNames = await getSettings("allowedNames");
-  const danhSach = savedNames || ALLOWED_NAMES;
-  const ds = [...danhSach]
-    .sort((a, b) => a.localeCompare(b, 'vi', { sensitivity: 'base' }))
+  const chuaXacNhan = await layDanhSachChuaXacNhan();
+
+  if (chuaXacNhan.length === 0) {
+    await guiTinNhan(recipientId,
+      "Tất cả thành viên đã xác nhận rồi!\n" +
+      "Nếu không thấy tên mình, nhắn admin Trần Agness nhé."
+    );
+    return;
+  }
+
+  const ds = [...chuaXacNhan]
+    .sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }))
     .map((t, i) => `${i + 1}. ${t}`)
     .join("\n");
-  await guiTinNhan(recipientId, `Danh sách thành viên:\n\n${ds}`);
+
+  await guiTinNhan(recipientId, `Danh sách thành viên chưa đăng ký:\n\n${ds}`);
 }
 
 const PORT = process.env.PORT || 3000;
