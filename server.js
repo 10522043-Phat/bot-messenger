@@ -23,6 +23,7 @@ app.use(express.json({
 // ===== CẤU HÌNH =====
 const APP_SECRET        = process.env.APP_SECRET;
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
+const GEMINI_MODEL      = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 const VERIFY_TOKEN      = process.env.VERIFY_TOKEN || "mytoken123";
 const MONGODB_URI       = process.env.MONGODB_URI;
 const QR_CODE_URL       = process.env.QR_CODE_URL;
@@ -701,7 +702,7 @@ async function hoiGemini(cauHoi, tenUser, ngonNgu = "vi", lichSu = []) {
 
   try {
     const res = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
      {
         contents,
        systemInstruction: {
