@@ -191,7 +191,6 @@ async function nhacNguoiChuaDong() {
     `Bạn thanh toán sớm giúp mình nhé!\n\n` +
     `YES — để nhận mã QR thanh toán\n` +
     `NO  — để hủy đăng ký`,
-    true
   );
       await User.updateOne({ senderId: user.senderId }, { choDoiThanhToan: true });
       soNguoiNhac++;
@@ -292,7 +291,6 @@ cron.schedule("15 12 6 * *", async () => {
      `Tới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?\n\n` +
      `YES — để tiếp tục\n` +
      `NO  — để hủy đăng ký`,
-     true
 );
   }
 }, { timezone: "Asia/Ho_Chi_Minh" });
@@ -420,7 +418,7 @@ async function xuLyTinNhan(senderId, userMessage, user) {
       await guiTinNhan(senderId, `📢 Đang gửi cho ${danhSachId.length} người...`);
 
       for (const id of danhSachId) {
-        const ok = await guiTinNhan(id, noiDung, true);
+        const ok = await guiTinNhan(id, noiDung);
         ok ? thanhCong++ : thatBai++;
         await new Promise(r => setTimeout(r, 200));
       }
