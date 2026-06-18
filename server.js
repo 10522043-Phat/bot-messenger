@@ -46,7 +46,7 @@ let ALLOWED_NAMES = [
 ];
 
 // ====================
-
+const thongBaoChoXacNhan = {};
 
 // ===== KẾT NỐI MONGODB =====
 mongoose.connect(MONGODB_URI)
@@ -408,6 +408,38 @@ else if (event.message && !event.message.text && event.message.attachments) {
 // ===== XỬ LÝ TIN NHẮN =====
 async function xuLyTinNhan(senderId, userMessage, user) {
 
+// ===== XÁC NHẬN GỬI THÔNG BÁO (admin) =====
+  if (laAdmin(senderId) && thongBaoChoXacNhan[senderId] !== undefined) {
+    const traLoi = userMessage.toLowerCase().trim();
+
+    if (traLoi === "yes" || traLoi === "có" || traLoi === "co") {
+      const { noiDung, danhSachId } = thongBaoChoXacNhan[senderId];
+      delete thongBaoChoXacNhan[senderId];
+
+      let thanhCong = 0, thatBai = 0;
+      await guiTinNhan(senderId, `📢 Đang gửi cho ${danhSachId.length} người...`);
+
+      for (const id of danhSachId) {
+        const ok = await guiTinNhan(id, noiDung, true);
+        ok ? thanhCong++ : thatBai++;
+        await new Promise(r => setTimeout(r, 200));
+      }
+
+      await guiTinNhan(
+        senderId,
+        `📢 Đã gửi xong!\n✅ Thành công: ${thanhCong}\n❌ Thất bại: ${thatBai}`
+      );
+
+    } else if (traLoi === "no" || traLoi === "không" || traLoi === "khong" || traLoi === "huy") {
+      delete thongBaoChoXacNhan[senderId];
+      await guiTinNhan(senderId, "❌ Đã hủy.");
+
+    } else {
+      await guiTinNhan(senderId, "Bạn gõ YES để gửi, hoặc NO để hủy nhé 🙏");
+    }
+    return;
+  }
+
   // ===== LỆNH ADMIN =====
 const adminLenh = [
   "xem danh sach", "xem ten", "bat thu tien",
@@ -417,7 +449,9 @@ const adminLenh = [
   const laLenhAdmin =
     adminLenh.includes(userMessage.toLowerCase()) ||
     userMessage.toLowerCase().startsWith("them:") ||
-    userMessage.toLowerCase().startsWith("xoa:");
+    userMessage.toLowerCase().startsWith("xoa:") ||
+    userMessage.toLowerCase().startsWith("thongbao:") ||
+    userMessage.toLowerCase().startsWith("rieng:");  
 
   if (laLenhAdmin) {
     if (!laAdmin(senderId)) {
@@ -474,6 +508,112 @@ const adminLenh = [
   return;
 }
 
+// Lệnh gửi thông báo cho TẤT CẢ thành viên đã xác nhận
+  if (userMessage.toLowerCase().startsWith("thongbao:")) {
+    const noiDung = userMessage.slice(9).trim();
+    if (!noiDung) {
+      await guiTinNhan(senderId, "⚠️ Thiếu nội dung!\nGõ: thongbao:Nội dung muốn gửi");
+      return;
+    }
+
+    const users = await User.find({ xacNhan: true });
+    const danhSachId = users
+      .map(u => u.senderId)
+      .filter(id => id !== senderId);   // bỏ qua chính admin (xóa filter này nếu muốn nhận luôn)
+
+    thongBaoChoXacNhan[senderId] = { noiDung, danhSachId };
+
+    await guiTinNhan(
+      senderId,
+      `📋 Xem trước thông báo:\n──────────\n${noiDung}\n──────────\n\n` +
+      `Sẽ gửi cho ${danhSachId.length} thành viên.\n\n` +
+      `YES — để gửi\nNO  — để hủy`
+    );
+    return;
+  }
+                     
+// Lệnh gửi riêng cho 1 hoặc vài người cụ thể
+  if (userMessage.toLowerCase().startsWith("rieng:")) {
+    const phanConLai = userMessage.slice(6);
+
+    if (!phanConLai.includes("|")) {
+      await guiTinNhan(
+        senderId,
+        "⚠️ Sai cú pháp!\nGõ: rieng:Tên1, Tên2 | Nội dung\n\n" +
+        "Ví dụ: rieng:Quyên, Bảo Duy | Nhắc bạn đóng tiền nha!"
+      );
+      return;
+    }
+
+    const [phanTen, ...phanNoiDung] = phanConLai.split("|");
+    const noiDung = phanNoiDung.join("|").trim();   // phòng khi nội dung có dấu |
+    const tenList = phanTen.split(",").map(t => t.trim()).filter(Boolean);
+
+    if (tenList.length === 0 || !noiDung) {
+      await guiTinNhan(
+        senderId,
+        "⚠️ Thiếu tên hoặc nội dung!\nGõ: rieng:Tên1, Tên2 | Nội dung"
+      );
+      return;
+    }
+
+    // Map mỗi tên/số → tên chuẩn trong danh sách
+    const savedNames    = await getSettings("allowedNames");
+    const danhSachDayDu = savedNames || ALLOWED_NAMES;
+
+    const danhSachId = [];
+    const timThay    = [];
+    const khongThay  = [];
+    const chuaXacNhan = [];
+    const daThem     = new Set();
+
+    for (const tenNhap of tenList) {
+      const tenChuan = timTenTrongDanhSach(tenNhap, danhSachDayDu);
+      if (!tenChuan) {
+        khongThay.push(tenNhap);
+        continue;
+      }
+      const escaped = tenChuan.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const u = await User.findOne({
+        xacNhan: true,
+        ten: { $regex: new RegExp(`^${escaped}$`, "i") },
+      });
+      if (!u) {
+        chuaXacNhan.push(tenChuan);
+        continue;
+      }
+      if (daThem.has(u.senderId)) continue;   // tránh trùng
+      daThem.add(u.senderId);
+      danhSachId.push(u.senderId);
+      timThay.push(tenChuan);
+    }
+
+    if (danhSachId.length === 0) {
+      await guiTinNhan(
+        senderId,
+        "❌ Không gửi được cho ai cả.\n" +
+        (khongThay.length   ? `Không có trong danh sách: ${khongThay.join(", ")}\n` : "") +
+        (chuaXacNhan.length ? `Chưa đăng ký bot: ${chuaXacNhan.join(", ")}` : "")
+      );
+      return;
+    }
+
+    thongBaoChoXacNhan[senderId] = { noiDung, danhSachId };
+
+    let canhBao = "";
+    if (khongThay.length)   canhBao += `\n⚠️ Bỏ qua (không có trong DS): ${khongThay.join(", ")}`;
+    if (chuaXacNhan.length) canhBao += `\n⚠️ Bỏ qua (chưa đăng ký bot): ${chuaXacNhan.join(", ")}`;
+
+    await guiTinNhan(
+      senderId,
+      `📋 Xem trước:\n──────────\n${noiDung}\n──────────\n\n` +
+      `Gửi cho ${danhSachId.length} người: ${timThay.join(", ")}` +
+      canhBao +
+      `\n\nYES — để gửi\nNO  — để hủy`
+    );
+    return;
+  }
+                     
   // Lệnh xem tên
     if (userMessage.toLowerCase() === "xem ten") {
      const savedNames = await getSettings("allowedNames"); // ✅ đọc từ DB
@@ -716,8 +856,10 @@ async function guiTinNhan(recipientId, text, dungTag = false) {
       { params: { access_token: PAGE_ACCESS_TOKEN } }
     );
     console.log(`Đã gửi: "${text.substring(0, 50)}"`);
+return true; 
   } catch (err) {
     console.error("Lỗi gửi tin:", err.response?.data || err.message);
+return false; 
   }
 }
 
