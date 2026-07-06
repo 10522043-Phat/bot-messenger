@@ -442,7 +442,8 @@ async function xuLyTinNhan(senderId, userMessage, user) {
 const adminLenh = [
   "xem danh sach", "xem ten", "bat thu tien",
   "tat thu tien", "trang thai",
-  "kiem tra sheet", "xem chua dong"
+  "kiem tra sheet", "xem chua dong",
+  "xem chua dang ki"
 ];
   const laLenhAdmin =
     adminLenh.includes(userMessage.toLowerCase()) ||
@@ -656,6 +657,28 @@ if (userMessage.toLowerCase() === "xem danh sach") {
       await guiTinNhan(
         senderId,
         `📋 Chưa đóng tiền (${list.length} người):\n\n${ds}`
+      );
+    }
+    return;
+  }
+
+// Lệnh xem người chưa đăng ký bot
+  if (userMessage.toLowerCase() === "xem chua dang ki") {
+    const savedNames  = await getSettings("allowedNames");
+    const danhSachDayDu = savedNames || ALLOWED_NAMES;
+    const daXacNhan   = await User.find({ xacNhan: true }).lean().select("ten");
+    const tenDaChon   = new Set(daXacNhan.map(u => u.ten.toLowerCase()));
+
+    const chuaDangKi = danhSachDayDu.filter(
+      t => !tenDaChon.has(t.toLowerCase())
+    ).sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }));
+
+    if (chuaDangKi.length === 0) {
+      await guiTinNhan(senderId, "✅ Tất cả thành viên đã đăng ký bot rồi!");
+    } else {
+      const ds = chuaDangKi.map((t, i) => `${i + 1}. ${t}`).join("\n");
+      await guiTinNhan(senderId,
+        `📋 Chưa đăng ký bot (${chuaDangKi.length} người):\n\n${ds}`
       );
     }
     return;
