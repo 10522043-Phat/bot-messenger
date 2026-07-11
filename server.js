@@ -147,14 +147,6 @@ async function layDanhSachChuaDong() {
   return [...ds1, ...ds2];
 }
 
-async function layDanhSachChuaXacNhan() {
-  const savedNames = await getSettings("allowedNames");
-  const danhSach   = savedNames || ALLOWED_NAMES;
-  const daXacNhan  = await User.find({ xacNhan: true }).lean().select("ten");
-  const tenDaChon  = new Set(daXacNhan.map(u => u.ten.toLowerCase()));
-  return [...danhSach].filter(t => !tenDaChon.has(t.toLowerCase()));
-}
-
 // Gửi nhắc tới từng người chưa đóng
 async function nhacNguoiChuaDong(ghiMoc = true) {
   console.log("🔍 Check 2 Google Sheet để nhắc đóng tiền...");
@@ -331,7 +323,10 @@ app.get("/webhook", (req, res) => {
 });
 
 app.post("/webhook", (req, res) => {
-
+  if (!kiemTraChuKy(req)) {
+    console.warn("⚠️ Webhook chữ ký sai!");
+    return res.sendStatus(403);
+  }
   const body = req.body;
   if (body.object !== "page") {
     return res.sendStatus(404);
@@ -681,7 +676,56 @@ if (userMessage.toLowerCase() === "xem danh sach") {
     return;
   }
 
-  // Lệnh check Sheet ngay và nhắc luôn (không chờ cron)
+// Lệnh xem hướng dẫn
+  if (userMessage.toLowerCase() === "help") {
+    if (laAdmin(senderId)) {
+      // Admin → hiện lệnh admin
+      await guiTinNhan(senderId,
+        `📖 DANH SÁCH LỆNH ADMIN\n` +
+        `──────────────────\n\n` +
+        `👥 QUẢN LÝ THÀNH VIÊN\n` +
+        `• xem danh sach — xem ai đã đăng ký bot\n` +
+        `• xem ten — xem toàn bộ danh sách tên\n` +
+        `• xem chua dang ki — xem ai chưa vào bot\n` +
+        `• them:Tên — thêm tên mới\n` +
+        `• xoa:Tên — xóa tên khỏi danh sách\n\n` +
+        `💰 QUẢN LÝ THU TIỀN\n` +
+        `• bat thu tien — bật kỳ thu tiền\n` +
+        `• tat thu tien — tắt kỳ thu tiền\n` +
+        `• trang thai — xem đang bật hay tắt\n` +
+        `• xem chua dong — xem ai chưa đóng tiền\n` +
+        `• kiem tra sheet — check sheet & nhắc ngay\n\n` +
+        `📢 GỬI THÔNG BÁO\n` +
+        `• thongbao:Nội dung — gửi cho tất cả\n` +
+        `• rieng:Tên1, Tên2 | Nội dung — gửi riêng\n\n` +
+        `💡 Gõ "help" để xem lại danh sách này`
+      );
+    } else if (!user.xacNhan) {
+      // Chưa xác nhận → nhắc nhập tên
+      await guiTinNhan(senderId,
+        "Bạn hãy nhập tên mình trong danh sách trước nhé!\n" +
+        "Sau khi xác nhận, gõ 'help' để xem các lệnh bạn có thể dùng 😊"
+      );
+    } else {
+      await guiTinNhan(senderId,
+        `📖 CÁC LỆNH BẠN CÓ THỂ DÙNG\n` +
+        `──────────────────\n\n` +
+        `💰 KHI ĐƯỢC NHẮC ĐÓNG TIỀN\n` +
+        `• YES — đồng ý đóng tiền & nhận mã QR\n` +
+        `• NO — hủy đăng ký dịch vụ\n\n` +
+        `🌐 ĐỔI NGÔN NGỮ\n` +
+        `• vi — chuyển sang tiếng Việt 🇻🇳\n` +
+        `• en — switch to English 🇬🇧\n\n` +
+        `🧹 KHÁC\n` +
+        `• reset — xóa lịch sử chat với bot\n` +
+        `• help — xem lại danh sách lệnh này\n\n` +
+        `💬 Ngoài ra bạn có thể hỏi mình bất cứ điều gì!`
+      );
+    }
+    return;
+  }
+
+// Lệnh check Sheet ngay và nhắc luôn (không chờ cron)
 if (userMessage.toLowerCase() === "kiem tra sheet") {
   const dangThu = await getSettings("dangThuTien");
   if (!dangThu) {
