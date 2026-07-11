@@ -270,26 +270,40 @@ async function xuLyGetStarted(senderId) {
  
 // ===== LỊCH NHẮC ĐÓNG TIỀN =====
 cron.schedule("15 12 6 * *", async () => {
+  try {
   console.log("Gửi nhắc đóng tiền");
   await setSettings("dangThuTien", true);
   await setSettings("lastSheetReminder", new Date().toISOString());
+
+  // Check sheet trước
+  const chuaDongList = await layDanhSachChuaDong();
+if (chuaDongList.length === 0) {
+  console.log("⚠️ Sheet trống hoặc lỗi API, bỏ qua cron ngày 6.");
+  return;
+}
+  const tenChuaDong = new Set(chuaDongList.map(x => x.ten.toLowerCase()));
+
   const users = await User.find({ xacNhan: true });
   for (const user of users) {
-    await User.updateOne({ senderId: user.senderId }, { choDoiThanhToan: true });
+    if (!tenChuaDong.has(user.ten.toLowerCase())) continue; // đã đóng → bỏ qua
 
-    const ten = user.xacNhan ? user.ten : "bạn";
+    await User.updateOne({ senderId: user.senderId }, { choDoiThanhToan: true });
     await guiTinNhan(user.senderId,
-     `Hi ${ten}!\n\n` +
-     `Tới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?\n\n` +
-     `YES — để tiếp tục\n` +
-     `NO  — để hủy đăng ký`,
-);
+      `Hi ${user.ten}!\n\n` +
+      `Tới hạn đóng tiền tháng này rồi bạn có muốn xài tiếp nữa không?\n\n` +
+      `YES — để tiếp tục\n` +
+      `NO  — để hủy đăng ký`
+    );
+  }
+  } catch (err) {
+    console.error("Lỗi cron ngày 6:", err);
   }
 }, { timezone: "Asia/Ho_Chi_Minh" });
 
 // ===== CRON NHẮC MỖI 2 NGÀY DỰA TRÊN GOOGLE SHEETS =====
 // Chạy lúc 12h15 trưa vào các ngày chẳn (2, 4, 6,... 16),
 cron.schedule("15 12 8,10,12,14,16 * *", async () => {
+  try {
   // Kiểm tra xem đã đủ 48 tiếng kể từ lần nhắc trước chưa
   const lastRun = await getSettings("lastSheetReminder");
   if (lastRun) {
@@ -306,6 +320,9 @@ cron.schedule("15 12 8,10,12,14,16 * *", async () => {
   }
 
   await nhacNguoiChuaDong();
+  } catch (err) {
+    console.error("Lỗi cron ngày 6:", err);
+  }
 }, { timezone: "Asia/Ho_Chi_Minh" });
 
 // ===== WEBHOOK =====
@@ -681,49 +698,68 @@ if (userMessage.toLowerCase() === "xem danh sach") {
     if (laAdmin(senderId)) {
       // Admin → hiện lệnh admin
       await guiTinNhan(senderId,
-        `📖 DANH SÁCH LỆNH ADMIN\n` +
+        `DANH SÁCH LỆNH ADMIN\n` +
         `──────────────────\n\n` +
-        `👥 QUẢN LÝ THÀNH VIÊN\n` +
+        `QUẢN LÝ THÀNH VIÊN\n` +
         `• xem danh sach — xem ai đã đăng ký bot\n` +
         `• xem ten — xem toàn bộ danh sách tên\n` +
         `• xem chua dang ki — xem ai chưa vào bot\n` +
         `• them:Tên — thêm tên mới\n` +
         `• xoa:Tên — xóa tên khỏi danh sách\n\n` +
-        `💰 QUẢN LÝ THU TIỀN\n` +
+        `QUẢN LÝ THU TIỀN\n` +
         `• bat thu tien — bật kỳ thu tiền\n` +
         `• tat thu tien — tắt kỳ thu tiền\n` +
         `• trang thai — xem đang bật hay tắt\n` +
         `• xem chua dong — xem ai chưa đóng tiền\n` +
         `• kiem tra sheet — check sheet & nhắc ngay\n\n` +
-        `📢 GỬI THÔNG BÁO\n` +
+        `GỬI THÔNG BÁO\n` +
         `• thongbao:Nội dung — gửi cho tất cả\n` +
         `• rieng:Tên1, Tên2 | Nội dung — gửi riêng\n\n` +
-        `💡 Gõ "help" để xem lại danh sách này`
+        `Bạn gõ lại lệnh "help" nếu muốn xem lại danh sách này á`
       );
+      return;
     } else if (!user.xacNhan) {
       // Chưa xác nhận → nhắc nhập tên
       await guiTinNhan(senderId,
         "Bạn hãy nhập tên mình trong danh sách trước nhé!\n" +
-        "Sau khi xác nhận, gõ 'help' để xem các lệnh bạn có thể dùng 😊"
+        "Sau khi xác nhận, gõ 'help' để xem các lệnh bạn có thể dùng nha!"
+      );
+      return;
+} else {
+  if (user.ngonNgu === "en") {
+    await guiTinNhan(senderId,
+      `COMMANDS YOU CAN USE\n` +
+      `──────────────────\n\n` +
+      `WHEN REMINDED TO PAY\n` +
+      `• YES — confirm payment & receive QR code\n` +
+      `• NO — cancel subscription\n\n` +
+      `LANGUAGE\n` +
+      `• vi — switch to Vietnamese 🇻🇳\n` +
+      `• en — switch to English 🇬🇧\n\n` +
+      `OTHER\n` +
+      `• reset — clear chat history with bot\n` +
+      `• help — show this list again\n\n` +
+      `Feel free to ask me anything!`
       );
     } else {
       await guiTinNhan(senderId,
-        `📖 CÁC LỆNH BẠN CÓ THỂ DÙNG\n` +
+        `LỆNH BẠN CÓ THỂ DÙNG\n` +
         `──────────────────\n\n` +
-        `💰 KHI ĐƯỢC NHẮC ĐÓNG TIỀN\n` +
+        `KHI ĐƯỢC NHẮC ĐÓNG TIỀN\n` +
         `• YES — đồng ý đóng tiền & nhận mã QR\n` +
         `• NO — hủy đăng ký dịch vụ\n\n` +
-        `🌐 ĐỔI NGÔN NGỮ\n` +
+        `ĐỔI NGÔN NGỮ\n` +
         `• vi — chuyển sang tiếng Việt 🇻🇳\n` +
         `• en — switch to English 🇬🇧\n\n` +
-        `🧹 KHÁC\n` +
+        `KHÁC\n` +
         `• reset — xóa lịch sử chat với bot\n` +
         `• help — xem lại danh sách lệnh này\n\n` +
-        `💬 Ngoài ra bạn có thể hỏi mình bất cứ điều gì!`
+        `Ngoài ra bạn có thể hỏi mình bất cứ điều gì!`
       );
     }
     return;
   }
+}
 
 // Lệnh check Sheet ngay và nhắc luôn (không chờ cron)
 if (userMessage.toLowerCase() === "kiem tra sheet") {
@@ -764,6 +800,25 @@ if (userMessage.toLowerCase() === "kiem tra sheet") {
     await guiTinNhan(senderId, `📊 Kỳ thu tiền: ${dangThuTien ? "🟢 Đang bật" : "🔴 Đang tắt"}`);
     return;
   }
+
+    const msg = userMessage.toLowerCase();
+
+// Cho phép đổi ngôn ngữ bất kỳ lúc nào
+    const xinTiengViet = ["vi", "tiếng việt", "tieng viet", "vietnamese", "switch to vietnamese"]
+      .some(t => msg === t || (msg.includes("vietnamese") && (msg.includes("switch") || msg.includes("change") || msg.includes("speak"))) || msg.includes("chuyển qua tiếng việt") || msg.includes("nói tiếng việt"));
+    if (xinTiengViet) {
+      await User.updateOne({ senderId }, { ngonNgu: "vi" });
+      await guiTinNhan(senderId, "OK mình sẽ hỗ trợ bằng tiếng Việt nha! 🇻🇳\nBạn cần giúp gì?");
+      return;
+    }
+
+    const xinTiengAnh = ["en", "english"]
+      .some(t => msg === t) || (msg.includes("english") && (msg.includes("switch") || msg.includes("change") || msg.includes("speak"))) || msg.includes("chuyển qua tiếng anh") || msg.includes("nói tiếng anh");
+    if (xinTiengAnh) {
+      await User.updateOne({ senderId }, { ngonNgu: "en" });
+      await guiTinNhan(senderId, "Got it, I'll assist you in English! 🇬🇧\nHow can I help?");
+      return;
+    }
 
   if (user.choDoiThanhToan) {
     const msg = userMessage.toLowerCase();
@@ -852,24 +907,6 @@ if (!user.xacNhan) {
       await guiAnhDanhSachTen(senderId);
     }
   } else if (user.xacNhan && !user.choDoiThanhToan) {
-    const msg = userMessage.toLowerCase();
-
-// Cho phép đổi ngôn ngữ bất kỳ lúc nào
-    const xinTiengViet = ["vi", "tiếng việt", "tieng viet", "vietnamese", "switch to vietnamese"]
-      .some(t => msg === t || (msg.includes("vietnamese") && (msg.includes("switch") || msg.includes("change") || msg.includes("speak"))) || msg.includes("chuyển qua tiếng việt") || msg.includes("nói tiếng việt"));
-    if (xinTiengViet) {
-      await User.updateOne({ senderId }, { ngonNgu: "vi" });
-      await guiTinNhan(senderId, "OK mình sẽ hỗ trợ bằng tiếng Việt nha! 🇻🇳\nBạn cần giúp gì?");
-      return;
-    }
-
-    const xinTiengAnh = ["en", "english"]
-      .some(t => msg === t) || (msg.includes("english") && (msg.includes("switch") || msg.includes("change") || msg.includes("speak"))) || msg.includes("chuyển qua tiếng anh") || msg.includes("nói tiếng anh");
-    if (xinTiengAnh) {
-      await User.updateOne({ senderId }, { ngonNgu: "en" });
-      await guiTinNhan(senderId, "Got it, I'll assist you in English! 🇬🇧\nHow can I help?");
-      return;
-    }
 
     if (msg === "reset" || msg === "quên đi" || msg === "quen di") {
       await User.updateOne({ senderId }, { lichSuChat: [] });
@@ -948,6 +985,10 @@ async function hoiGemini(cauHoi, tenUser, ngonNgu = "vi", lichSu = []) {
            text:
              "Bạn là trợ lý hỗ trợ của nhóm share tài khoản AI (Claude). " +
              "Tên bạn là Agness Bot, phong cách thân thiện, vui vẻ, dùng emoji vừa phải.\n\n" +
+
+            "=== NGƯỜI DÙNG HIỆN TẠI ===\n" +
+            `Bạn đang trò chuyện với ${tenUser}. ` +
+            `Khi cần, gọi tên họ để tạo cảm giác thân thiện.\n\n` +
  
              "=== THÔNG TIN NHÓM ===\n" +
              "- Nhóm cung cấp tài khoản Claude AI dùng chung, thu phí hàng tháng.\n" +
