@@ -331,10 +331,7 @@ app.get("/webhook", (req, res) => {
 });
 
 app.post("/webhook", (req, res) => {
-  if (!kiemTraChuKy(req)) {
-    console.warn("⚠️ Webhook chữ ký sai — request giả mạo?");
-    return res.sendStatus(403);
-  }
+
   const body = req.body;
   if (body.object !== "page") {
     return res.sendStatus(404);
